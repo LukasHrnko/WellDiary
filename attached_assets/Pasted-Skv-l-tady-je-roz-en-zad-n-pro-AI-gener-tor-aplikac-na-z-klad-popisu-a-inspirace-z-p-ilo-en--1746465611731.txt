@@ -1,0 +1,53 @@
+Skvělé, tady je rozšířené zadání pro AI generátor aplikací na základě popisu a inspirace z přiloženého obrázku:
+
+---
+
+## ✨ Zadání pro AI generátor aplikací
+
+### **Název aplikace:** WellDiary
+
+### **Cíl:**
+
+Podporovat duševní a fyzické zdraví uživatele prostřednictvím kombinace digitálního rozhraní a fyzického deníku. Aplikace poskytuje přehled o náladě, emocích, spánku a pohybu, nabízí personalizované tipy a motivuje k udržování zdravých návyků.
+
+---
+
+### 🧠 Klíčové funkce:
+
+* **Týdenní digitalizace deníku:**
+  Uživatel jednou týdně nahraje fotku papírového deníku. Pomocí **OCR** se extrahují textová data (nálada, spánek, emoce, pohyb, poznámky).
+
+* **Dotazníky a denní sebehodnocení:**
+  Možnost rychlého záznamu nálady, spánku, aktivity a pocitů během dne přímo v aplikaci.
+
+* **AI analýza & zpětná vazba:**
+  AI na základě zápisů analyzuje trendy (např. výkyvy nálady, kvalita spánku), poskytuje personalizované rady a návrhy na zlepšení (např. "Zkuste dnes dříve spát", "Jděte se projít").
+
+* **Přehledná hlavní stránka s dashboardem:**
+
+  * Graf nálady během týdne
+  * Spánkový graf
+  * Aktivita (kroky, čas pohybu)
+  * Tipy týdne
+  * Změny oproti předchozímu týdnu
+
+* **Gamifikace:**
+
+  * Odznaky a výzvy (např. 7 dní pozitivních zápisků, 5 dní v řadě spánek > 7h)
+  * Statistiky a „úspěchy“ ve stylu dashboardu z přiloženého obrázku
+  * Přehled dosažených cílů a projektů (např. „Zvládnuté stresové období“)
+
+---
+
+### 🎨 Vizuální styl (inspirováno přiloženým obrázkem):
+
+* **Moderní, čistý a přehledný design:** světlé barvy s jemnými kontrasty, zakulacené rohy, dostatek bílé plochy.
+* **Karty a boxy:** informace jsou strukturovány do přehledných boxů a panelů – grafy, seznam úkolů, metriky, AI doporučení.
+* **Barevné kódování:** např. nálada pomocí barevných ikon/obličejů, spánek odstíny modré, aktivita odstíny zelené.
+* **Boční panel s navigací:** podobně jako na přiloženém obrázku – sekce jako „Dashboard“, „Deník“, „Zdraví“, „Tipy“, „Nastavení“.
+* **Interaktivní grafy:** jednoduché sloupcové a liniové grafy pro sledování pokroku.
+* **AI asistent jako vizuální prvek:** box v rohu se zprávou nebo doporučením (např. „Dnes jsi působil(a) napjatě – nezapomeň odpočívat“).
+
+---
+
+Chceš, abych na základě tohoto vytvořil i návrh uživatelského rozhraní (např. wireframe nebo vizuální koncept)?
