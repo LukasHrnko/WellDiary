@@ -21,9 +21,8 @@ const NavItem = ({ href, icon, label, active, onClick }: NavItemProps) => {
     <Link 
       href={href}
       className={cn(
-        "flex items-center px-6 py-3 text-lightText hover:bg-gray-50",
-        active && "bg-primary bg-opacity-10 text-primary border-r-4 border-primary",
-        !active && "text-gray-500"
+        "flex items-center px-6 py-3 hover:bg-gray-50",
+        active ? "text-primary border-r-4 border-primary" : "text-gray-500"
       )}
       onClick={onClick}
     >
