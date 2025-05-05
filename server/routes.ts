@@ -35,6 +35,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Add manual journal entry
+  app.post("/api/journal/entry", async (req, res) => {
+    try {
+      const { content, mood, sleep, activities, date } = req.body;
+      
+      // Create journal entry
+      const formattedDate = date || new Date().toISOString().split('T')[0];
+      
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content,
+        date: formattedDate,
+        imageUrl: null
+      });
+      
+      // Create mood entry if provided
+      if (typeof mood === 'number') {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: mood,
+          date: formattedDate
+        });
+      }
+      
+      // Create sleep entry if provided
+      if (typeof sleep === 'number') {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: sleep,
+          date: formattedDate
+        });
+      }
+      
+      // Create activity entry if activities provided
+      if (activities && activities.length > 0) {
+        // Calculate steps estimate based on activities
+        const hasExercise = activities.some(activity => 
+          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
+            activity.toLowerCase().includes(term)
+          )
+        );
+        
+        // Create an activity entry with an estimated step count
+        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
+        
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps,
+          date: formattedDate
+        });
+      }
+      
+      // Generate journal insights
+      await updateJournalInsights(MOCK_USER_ID);
+      
+      // Check for new achievements
+      await checkAndUpdateAchievements(MOCK_USER_ID);
+      
+      res.json({ 
+        success: true, 
+        message: "Journal entry added successfully",
+        journal
+      });
+    } catch (error) {
+      console.error("Error adding journal entry:", error);
+      res.status(500).json({ message: "Failed to add journal entry" });
+    }
+  });
+  
   // Get last journal upload date
   app.get("/api/journal/last-upload", async (_req, res) => {
     try {

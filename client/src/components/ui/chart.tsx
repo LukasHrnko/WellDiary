@@ -79,6 +79,7 @@ export function BarChart({
             fill={color}
             radius={[4, 4, 0, 0]}
             isAnimationActive={false}
+            activeBar={{ fill: `${color}CC` }}
           />
         </RechartsBarChart>
       </ResponsiveContainer>

@@ -1,12 +1,15 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { format } from "date-fns";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 interface JournalEntry {
   id: string;
@@ -18,11 +21,153 @@ interface JournalEntry {
 }
 
 const Journal: React.FC = () => {
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [content, setContent] = useState("");
+  const [mood, setMood] = useState(70);
+  const [sleep, setSleep] = useState(7.5);
+  const [activities, setActivities] = useState("");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
   const { data, isLoading } = useQuery<{ entries: JournalEntry[] }>({
     queryKey: ['/api/journal/entries'],
   });
   
   const entries = data?.entries || [];
+  
+  // Add new journal entry mutation
+  const addEntryMutation = useMutation({
+    mutationFn: async (formData: any) => {
+      const response = await apiRequest("POST", "/api/journal/entry", formData);
+      return await response.json();
+    },
+    onSuccess: () => {
+      // Reset the form
+      setContent("");
+      setMood(70);
+      setSleep(7.5);
+      setActivities("");
+      
+      // Invalidate the query to refetch data
+      queryClient.invalidateQueries({ queryKey: ["/api/journal/entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mood"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sleep"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/journal/insights"] });
+      
+      toast({
+        title: "Success",
+        description: "Journal entry added successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to add entry: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Upload journal photo mutation
+  const uploadJournalMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/journal/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || response.statusText);
+      }
+      
+      return await response.json();
+    },
+    onSuccess: () => {
+      // Reset the upload form
+      setUploadedFile(null);
+      setUploadPreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      
+      // Invalidate queries to refetch data
+      queryClient.invalidateQueries({ queryKey: ["/api/journal/entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mood"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sleep"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/journal/insights"] });
+      
+      toast({
+        title: "Success",
+        description: "Journal photo processed successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to process journal: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const handleEntrySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Parse activities into an array
+    const activitiesArray = activities
+      .split(",")
+      .map(activity => activity.trim())
+      .filter(activity => activity.length > 0);
+    
+    // Submit the form data
+    addEntryMutation.mutate({
+      content,
+      mood: Number(mood),
+      sleep: Number(sleep),
+      activities: activitiesArray,
+      date,
+    });
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploadedFile(file);
+      
+      // Create a preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setUploadPreview(e.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleUploadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!uploadedFile) {
+      toast({
+        title: "Error",
+        description: "Please select a file first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append("journal", uploadedFile);
+    
+    uploadJournalMutation.mutate(formData);
+  };
   
   return (
     <div className="p-4 md:p-6">
