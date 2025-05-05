@@ -18,7 +18,7 @@ interface JournalEntry {
 }
 
 const Journal: React.FC = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ entries: JournalEntry[] }>({
     queryKey: ['/api/journal/entries'],
   });
   
@@ -70,7 +70,7 @@ const Journal: React.FC = () => {
                   <CardContent>
                     <p className="whitespace-pre-wrap text-gray-600">{entry.content}</p>
                     
-                    {entry.activities.length > 0 && (
+                    {entry.activities && entry.activities.length > 0 && (
                       <div className="mt-3">
                         <h4 className="text-xs font-semibold text-gray-500 mb-1">Activities</h4>
                         <div className="flex flex-wrap gap-1">

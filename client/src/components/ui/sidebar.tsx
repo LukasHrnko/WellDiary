@@ -18,18 +18,17 @@ interface NavItemProps {
 
 const NavItem = ({ href, icon, label, active, onClick }: NavItemProps) => {
   return (
-    <Link href={href}>
-      <a
-        className={cn(
-          "flex items-center px-6 py-3 text-lightText hover:bg-gray-50",
-          active && "bg-primary bg-opacity-10 text-primary border-r-4 border-primary",
-          !active && "text-gray-500"
-        )}
-        onClick={onClick}
-      >
-        <FontAwesomeIcon icon={icon} className="w-5 h-5 mr-3" />
-        <span className={active ? "font-medium" : ""}>{label}</span>
-      </a>
+    <Link 
+      href={href}
+      className={cn(
+        "flex items-center px-6 py-3 text-lightText hover:bg-gray-50",
+        active && "bg-primary bg-opacity-10 text-primary border-r-4 border-primary",
+        !active && "text-gray-500"
+      )}
+      onClick={onClick}
+    >
+      <FontAwesomeIcon icon={icon} className="w-5 h-5 mr-3" />
+      <span className={active ? "font-medium" : ""}>{label}</span>
     </Link>
   );
 };
@@ -121,41 +120,45 @@ export function MobileNavigation() {
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white shadow-lg z-20">
       <div className="flex justify-around py-3">
-        <Link href="/">
-          <a className={cn(
+        <Link 
+          href="/"
+          className={cn(
             "flex flex-col items-center",
             location === "/" || location === "" ? "text-primary" : "text-gray-500"
-          )}>
-            <FontAwesomeIcon icon="th-large" />
-            <span className="text-xs mt-1">Dashboard</span>
-          </a>
+          )}
+        >
+          <FontAwesomeIcon icon="th-large" />
+          <span className="text-xs mt-1">Dashboard</span>
         </Link>
-        <Link href="/journal">
-          <a className={cn(
+        <Link 
+          href="/journal"
+          className={cn(
             "flex flex-col items-center",
             location === "/journal" ? "text-primary" : "text-gray-500"
-          )}>
-            <FontAwesomeIcon icon="book" />
-            <span className="text-xs mt-1">Journal</span>
-          </a>
+          )}
+        >
+          <FontAwesomeIcon icon="book" />
+          <span className="text-xs mt-1">Journal</span>
         </Link>
-        <Link href="/health">
-          <a className={cn(
+        <Link 
+          href="/health"
+          className={cn(
             "flex flex-col items-center",
             location === "/health" ? "text-primary" : "text-gray-500"
-          )}>
-            <FontAwesomeIcon icon="heart" />
-            <span className="text-xs mt-1">Health</span>
-          </a>
+          )}
+        >
+          <FontAwesomeIcon icon="heart" />
+          <span className="text-xs mt-1">Health</span>
         </Link>
-        <Link href="/achievements">
-          <a className={cn(
+        <Link 
+          href="/achievements"
+          className={cn(
             "flex flex-col items-center",
             location === "/achievements" ? "text-primary" : "text-gray-500"
-          )}>
-            <FontAwesomeIcon icon="trophy" />
-            <span className="text-xs mt-1">Progress</span>
-          </a>
+          )}
+        >
+          <FontAwesomeIcon icon="trophy" />
+          <span className="text-xs mt-1">Progress</span>
         </Link>
       </div>
     </div>

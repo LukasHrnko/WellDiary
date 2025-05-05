@@ -8,14 +8,16 @@ import {
   faThLarge, faBook, faHeart, faLightbulb, faTrophy, faCog, faBars,
   faBell, faChevronLeft, faChevronRight, faCloudUploadAlt, faMoon,
   faWalking, faBrain, faArrowUp, faArrowDown, faEllipsisH, faMedal,
-  faLock, faTimes
+  faLock, faTimes, faClock, faMobile, faCoffee, faFire, faSun, faUsers,
+  faAppleAlt, faCheck
 } from "@fortawesome/free-solid-svg-icons";
 
 library.add(
   faThLarge, faBook, faHeart, faLightbulb, faTrophy, faCog, faBars,
   faBell, faChevronLeft, faChevronRight, faCloudUploadAlt, faMoon,
   faWalking, faBrain, faArrowUp, faArrowDown, faEllipsisH, faMedal,
-  faLock, faTimes
+  faLock, faTimes, faClock, faMobile, faCoffee, faFire, faSun, faUsers,
+  faAppleAlt, faCheck
 );
 
 createRoot(document.getElementById("root")!).render(<App />);
