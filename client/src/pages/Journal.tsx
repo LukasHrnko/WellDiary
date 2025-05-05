@@ -257,7 +257,7 @@ const Journal: React.FC = () => {
               <CardTitle>New Journal Entry</CardTitle>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={handleEntrySubmit}>
                 <div>
                   <label htmlFor="entry-date" className="block text-sm font-medium mb-1">
                     Date
@@ -265,7 +265,8 @@ const Journal: React.FC = () => {
                   <Input 
                     id="entry-date" 
                     type="date" 
-                    defaultValue={format(new Date(), "yyyy-MM-dd")} 
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
                   />
                 </div>
                 
@@ -277,6 +278,9 @@ const Journal: React.FC = () => {
                     id="entry-content" 
                     placeholder="How was your day? What's on your mind?" 
                     rows={6} 
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    required
                   />
                 </div>
                 
@@ -290,7 +294,8 @@ const Journal: React.FC = () => {
                       type="number" 
                       min="1" 
                       max="100" 
-                      defaultValue="70" 
+                      value={mood}
+                      onChange={(e) => setMood(Number(e.target.value))}
                     />
                   </div>
                   
@@ -304,7 +309,8 @@ const Journal: React.FC = () => {
                       min="0" 
                       max="24" 
                       step="0.5" 
-                      defaultValue="7.5" 
+                      value={sleep}
+                      onChange={(e) => setSleep(Number(e.target.value))}
                     />
                   </div>
                 </div>
@@ -316,11 +322,23 @@ const Journal: React.FC = () => {
                   <Input 
                     id="entry-activities" 
                     placeholder="e.g. walking, reading, meditation" 
+                    value={activities}
+                    onChange={(e) => setActivities(e.target.value)}
                   />
                 </div>
                 
                 <div className="pt-4">
-                  <Button type="submit">Save Entry</Button>
+                  <Button 
+                    type="submit" 
+                    disabled={addEntryMutation.isPending || !content.trim()}
+                  >
+                    {addEntryMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : "Save Entry"}
+                  </Button>
                 </div>
               </form>
             </CardContent>
@@ -333,26 +351,70 @@ const Journal: React.FC = () => {
               <CardTitle>Upload Journal Photo</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
-                <FontAwesomeIcon icon="cloud-upload-alt" className="text-3xl text-gray-400 mb-2" />
-                <p className="text-sm text-gray-500 mb-3">
-                  Drag and drop your journal photo or click to browse
-                </p>
-                <label>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                  />
-                  <span className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer">
-                    Upload Photo
-                  </span>
-                </label>
+              <form onSubmit={handleUploadSubmit} className="space-y-6">
+                {uploadPreview ? (
+                  <div className="mb-4">
+                    <img 
+                      src={uploadPreview} 
+                      alt="Journal preview" 
+                      className="max-w-full h-auto mx-auto max-h-96 rounded-lg shadow-md" 
+                    />
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        setUploadedFile(null);
+                        setUploadPreview(null);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }}
+                    >
+                      Remove Image
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+                    <FontAwesomeIcon icon="cloud-upload-alt" className="text-3xl text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500 mb-3">
+                      Drag and drop your journal photo or click to browse
+                    </p>
+                    <label>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleFileChange}
+                        ref={fileInputRef}
+                      />
+                      <span className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer">
+                        Upload Photo
+                      </span>
+                    </label>
+                  </div>
+                )}
+                
                 <p className="text-xs text-gray-400 mt-6">
                   Our OCR technology will automatically extract text from your journal.
                   For best results, ensure your handwriting is clear and the image is well-lit.
                 </p>
-              </div>
+                
+                {uploadedFile && (
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={uploadJournalMutation.isPending}
+                  >
+                    {uploadJournalMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : "Process Journal"}
+                  </Button>
+                )}
+              </form>
             </CardContent>
           </Card>
         </TabsContent>
