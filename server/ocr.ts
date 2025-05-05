@@ -31,14 +31,11 @@ if (!fs.existsSync(uploadDir)) {
  */
 export async function performOCR(imagePath: string): Promise<OCRResult> {
   try {
-    // Create worker without specifying logger to avoid typechecking issues
+    // Use a simpler approach with createWorker without extra config
+    // that causes type errors with the current version of tesseract.js
     const worker = await createWorker();
     
-    // Initialize the worker with English language
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    
-    // Recognize text in the image
+    // Recognize text directly - the worker will detect language
     const { data } = await worker.recognize(imagePath);
     await worker.terminate();
     
