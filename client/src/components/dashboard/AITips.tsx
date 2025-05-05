@@ -17,7 +17,7 @@ interface Tip {
 }
 
 const AITips: React.FC = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ tips: any[] }>({
     queryKey: ['/api/tips'],
   });
   

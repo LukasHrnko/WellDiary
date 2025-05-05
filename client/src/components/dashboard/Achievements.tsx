@@ -19,7 +19,7 @@ interface Achievement {
 }
 
 const Achievements: React.FC = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ achievements: Achievement[] }>({
     queryKey: ['/api/achievements'],
   });
   
@@ -58,8 +58,8 @@ const Achievements: React.FC = () => {
       <CardContent className="p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-semibold">Achievements</h2>
-          <Link href="/achievements">
-            <a className="text-sm text-primary">View All</a>
+          <Link href="/achievements" className="text-sm text-primary">
+            View All
           </Link>
         </div>
         

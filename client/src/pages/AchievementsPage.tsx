@@ -20,7 +20,7 @@ interface Achievement {
 }
 
 const AchievementsPage: React.FC = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ achievements: Achievement[], categories: string[] }>({
     queryKey: ['/api/achievements/all'],
   });
   

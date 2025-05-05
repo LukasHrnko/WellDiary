@@ -17,7 +17,7 @@ interface Correlation {
 }
 
 const JournalInsights: React.FC = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ themes: Theme[], correlations: Correlation[] }>({
     queryKey: ['/api/journal/insights'],
   });
   

@@ -15,7 +15,7 @@ interface Tip {
 }
 
 const Tips: React.FC = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ tips: Tip[], categories: string[] }>({
     queryKey: ['/api/tips/all'],
   });
   

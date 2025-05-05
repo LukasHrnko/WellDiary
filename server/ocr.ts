@@ -31,13 +31,14 @@ if (!fs.existsSync(uploadDir)) {
  */
 export async function performOCR(imagePath: string): Promise<OCRResult> {
   try {
-    // Create worker with specified params to ensure proper initialization
-    const worker = await createWorker({
-      logger: m => console.log(m),
-    });
+    // Create worker without specifying logger to avoid typechecking issues
+    const worker = await createWorker();
     
-    // Recognize text in the image directly without separate language loading
-    // In newer versions of tesseract.js, initialize() is handled internally
+    // Initialize the worker with English language
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+    
+    // Recognize text in the image
     const { data } = await worker.recognize(imagePath);
     await worker.terminate();
     
@@ -142,9 +143,9 @@ export function extractJournalData(text: string): JournalExtraction {
   
   // Extract activities (look for lists or sections of activities)
   const activityPatterns = [
-    /activities\s*:?(.*?)(?:\n\n|\n[A-Z]|$)/is,
-    /did today\s*:?(.*?)(?:\n\n|\n[A-Z]|$)/is,
-    /exercise\s*:?(.*?)(?:\n\n|\n[A-Z]|$)/is
+    /activities\s*:?(.*?)(?:\n\n|\n[A-Z]|$)/i,
+    /did today\s*:?(.*?)(?:\n\n|\n[A-Z]|$)/i,
+    /exercise\s*:?(.*?)(?:\n\n|\n[A-Z]|$)/i
   ];
   
   for (const pattern of activityPatterns) {
