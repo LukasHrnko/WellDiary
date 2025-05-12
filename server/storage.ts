@@ -474,18 +474,54 @@ export async function insertTip(tipData: InsertTip): Promise<Tip> {
 /**
  * Achievements methods
  */
-export async function getAchievements(userId: number, limit = 3): Promise<Achievement[]> {
-  return await db
+export async function getAchievements(userId: number, limit = 3): Promise<any[]> {
+  // Get all master achievements
+  const masterAchievements = await db
     .select()
-    .from(achievements)
-    .limit(limit);
+    .from(achievements);
+  
+  // Get user-specific achievement progress
+  const userAchievementsResult = await db
+    .select()
+    .from(userAchievements)
+    .where(eq(userAchievements.userId, userId));
+  
+  // If no user achievements found, create default entries for each achievement
+  if (userAchievementsResult.length === 0) {
+    await initializeUserAchievements(userId, masterAchievements);
+    return getAchievements(userId, limit); // Retry after initialization
+  }
+  
+  // Combine master achievement definitions with user progress
+  const combinedAchievements = masterAchievements.map(achievement => {
+    const userProgress = userAchievementsResult.find(ua => ua.achievementId === achievement.id);
+    return {
+      ...achievement,
+      unlocked: userProgress ? userProgress.unlocked : false,
+      unlockedAt: userProgress ? userProgress.unlockedAt : null,
+      progress: userProgress ? userProgress.progress : 0
+    };
+  });
+  
+  // Sort by unlocked (unlocked first), then by unlockedAt (most recent first)
+  combinedAchievements.sort((a, b) => {
+    if (a.unlocked === b.unlocked) {
+      if (!a.unlockedAt && !b.unlockedAt) return 0;
+      if (!a.unlockedAt) return 1;
+      if (!b.unlockedAt) return -1;
+      return new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime();
+    }
+    return a.unlocked ? -1 : 1;
+  });
+  
+  return limit ? combinedAchievements.slice(0, limit) : combinedAchievements;
 }
 
 export async function getAllAchievements(userId: number): Promise<{
-  achievements: Achievement[];
+  achievements: any[];
   categories: string[];
 }> {
-  const achievementsData = await db.select().from(achievements);
+  const achievementsData = await getAchievements(userId, 0); // 0 = no limit
   
   // Extract unique categories
   const categories = [...new Set(achievementsData.map(achievement => achievement.category))];
@@ -496,6 +532,38 @@ export async function getAllAchievements(userId: number): Promise<{
 export async function insertAchievement(achievementData: InsertAchievement): Promise<Achievement> {
   const result = await db.insert(achievements).values(achievementData).returning();
   return result[0];
+}
+
+export async function initializeUserAchievements(userId: number, masterAchievements?: Achievement[]): Promise<void> {
+  // Get all master achievements if not provided
+  if (!masterAchievements) {
+    masterAchievements = await db.select().from(achievements);
+  }
+  
+  // Create default user achievement entries for each master achievement
+  for (const achievement of masterAchievements) {
+    await db.insert(userAchievements).values({
+      userId,
+      achievementId: achievement.id,
+      unlocked: false,
+      progress: 0
+    });
+  }
+}
+
+export async function updateUserAchievement(userId: number, achievementId: string, data: Partial<InsertUserAchievement>): Promise<void> {
+  await db
+    .update(userAchievements)
+    .set({
+      ...data,
+      updatedAt: new Date().toISOString()
+    })
+    .where(
+      and(
+        eq(userAchievements.userId, userId),
+        eq(userAchievements.achievementId, achievementId)
+      )
+    );
 }
 
 /**

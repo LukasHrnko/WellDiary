@@ -131,16 +131,25 @@ export const insertTipSchema = createInsertSchema(tips).omit({
 export type InsertTip = z.infer<typeof insertTipSchema>;
 export type Tip = typeof tips.$inferSelect;
 
-// Achievements Table
+// User Achievements Table
+export const userAchievements = pgTable("user_achievements", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  achievementId: text("achievement_id").notNull(),
+  unlocked: boolean("unlocked").default(false).notNull(),
+  unlockedAt: text("unlocked_at"),
+  progress: integer("progress"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Achievements Table (master definitions)
 export const achievements = pgTable("achievements", {
   id: text("id").primaryKey(),
   category: text("category").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull(),
   icon: text("icon").notNull(),
-  unlocked: boolean("unlocked").default(false).notNull(),
-  unlockedAt: text("unlocked_at"),
-  progress: integer("progress"),
   goal: integer("goal"),
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
@@ -151,6 +160,15 @@ export const insertAchievementSchema = createInsertSchema(achievements).omit({
 
 export type InsertAchievement = z.infer<typeof insertAchievementSchema>;
 export type Achievement = typeof achievements.$inferSelect;
+
+export const insertUserAchievementSchema = createInsertSchema(userAchievements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertUserAchievement = z.infer<typeof insertUserAchievementSchema>;
+export type UserAchievement = typeof userAchievements.$inferSelect;
 
 // Journal Insights Table
 export const journalInsights = pgTable("journal_insights", {
@@ -178,7 +196,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   moods: many(moods),
   sleep: many(sleep),
   activity: many(activity),
-  journalInsights: many(journalInsights)
+  journalInsights: many(journalInsights),
+  userAchievements: many(userAchievements)
 }));
 
 export const settingsRelations = relations(settings, ({ one }) => ({
@@ -203,4 +222,12 @@ export const activityRelations = relations(activity, ({ one }) => ({
 
 export const journalInsightsRelations = relations(journalInsights, ({ one }) => ({
   user: one(users, { fields: [journalInsights.userId], references: [users.id] })
+}));
+
+export const userAchievementsRelations = relations(userAchievements, ({ one }) => ({
+  user: one(users, { fields: [userAchievements.userId], references: [users.id] })
+}));
+
+export const achievementsRelations = relations(achievements, ({ many }) => ({
+  userAchievements: many(userAchievements)
 }));
