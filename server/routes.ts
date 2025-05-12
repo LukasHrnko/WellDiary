@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import * as storage from "./storage";
 import * as ocr from "./ocr";
+import * as paddleocr from "./paddleocr";
 import * as ai from "./ai";
 import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
