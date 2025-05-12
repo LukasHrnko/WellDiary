@@ -279,10 +279,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract structured data from OCR text using the same extraction logic
       const journalData = ocr.extractJournalData(ocrResult.text);
       
-      // Save to database
-      const date = journalData.date 
-        ? new Date(journalData.date).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      // Save to database using safe date parsing
+      const date = safeParseDate(journalData.date);
       
       // Create journal entry
       const journal = await storage.insertJournal({
@@ -373,10 +371,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract structured data from OCR text using the same extraction logic
       const journalData = ocr.extractJournalData(ocrResult.text);
       
-      // Save to database
-      const date = journalData.date 
-        ? new Date(journalData.date).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      // Save to database using safe date parsing
+      const date = safeParseDate(journalData.date);
       
       // Create journal entry
       const journal = await storage.insertJournal({
@@ -487,6 +483,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error adding mood entry" });
     }
   });
+
+  // Get monthly mood data
+  app.get("/api/mood/monthly", async (_req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const startDate = format(new Date(now.getFullYear(), now.getMonth() - 2, 1), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
+      
+      const monthlyData = await storage.getMonthlyMoodData(MOCK_USER_ID, startDate, endDate);
+      
+      res.json(monthlyData);
+    } catch (error) {
+      console.error("Error fetching monthly mood data:", error);
+      res.status(500).json({ message: "Error fetching monthly mood data" });
+    }
+  });
   
   // === Sleep Routes ===
   
@@ -533,6 +545,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get monthly sleep data
+  app.get("/api/sleep/monthly", async (_req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const startDate = format(new Date(now.getFullYear(), now.getMonth() - 2, 1), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
+      
+      const monthlyData = await storage.getMonthlySleepData(MOCK_USER_ID, startDate, endDate);
+      
+      res.json(monthlyData);
+    } catch (error) {
+      console.error("Error fetching monthly sleep data:", error);
+      res.status(500).json({ message: "Error fetching monthly sleep data" });
+    }
+  });
+  
   // === Activity Routes ===
   
   // Get activity data
@@ -553,7 +581,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate weekly change
       const weeklyChange = activityData.average - prevWeekData.average;
       
-      res.json({ ...activityData, weeklyChange });
+      // Add step goal
+      const goal = 10000; // Default step goal
+      
+      res.json({ ...activityData, weeklyChange, goal });
     } catch (error) {
       console.error("Error fetching activity data:", error);
       res.status(500).json({ message: "Error fetching activity data" });
@@ -578,6 +609,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get monthly activity data
+  app.get("/api/activity/monthly", async (_req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const startDate = format(new Date(now.getFullYear(), now.getMonth() - 2, 1), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
+      
+      const monthlyData = await storage.getMonthlyActivityData(MOCK_USER_ID, startDate, endDate);
+      
+      res.json(monthlyData);
+    } catch (error) {
+      console.error("Error fetching monthly activity data:", error);
+      res.status(500).json({ message: "Error fetching monthly activity data" });
+    }
+  });
+  
   // === Journal Insights Routes ===
   
   // Get journal insights
@@ -596,25 +643,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get personalized tips
   app.get("/api/tips", async (_req: Request, res: Response) => {
     try {
-      // Generate fresh tips based on latest data
-      const now = new Date();
-      const startDate = format(subDays(now, 30), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      // Get user tips from database or generate new ones
+      let tips = await storage.getTips(MOCK_USER_ID);
       
-      // Get recent data
-      const moodData = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
-      const sleepData = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
-      const activityData = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
-      const journals = await storage.getJournalEntries(MOCK_USER_ID, 10);
-      
-      // Generate tips based on data trends
-      const tips = ai.generatePersonalizedTips(
-        MOCK_USER_ID,
-        moodData.moods,
-        sleepData.sleep,
-        activityData.activity,
-        journals
-      );
+      if (tips.length === 0) {
+        // Generate initial tips
+        const initialTips = [
+          {
+            id: `tip-1-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            category: "mood",
+            title: "Practice Gratitude",
+            description: "Studies show that writing down three things you're grateful for each day can significantly boost your mood."
+          },
+          {
+            id: `tip-2-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            category: "sleep",
+            title: "Create a Sleep Routine",
+            description: "Going to bed and waking up at the same time every day helps regulate your body's internal clock."
+          },
+          {
+            id: `tip-3-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            category: "activity",
+            title: "Take Walking Breaks",
+            description: "Even short 5-minute walks throughout your day can improve energy levels and focus."
+          }
+        ];
+        
+        // Save initial tips to database
+        for (const tip of initialTips) {
+          await storage.insertTip({
+            userId: MOCK_USER_ID,
+            category: tip.category,
+            title: tip.title,
+            description: tip.description,
+            id: tip.id
+          });
+        }
+        
+        tips = initialTips;
+      }
       
       res.json({ tips });
     } catch (error) {
@@ -625,18 +692,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === Achievements Routes ===
   
-  // Get achievements
+  // Get user achievements
   app.get("/api/achievements", async (_req: Request, res: Response) => {
     try {
-      const achievementsData = await storage.getAllAchievements(MOCK_USER_ID);
-      res.json(achievementsData);
+      const achievements = await storage.getAllAchievements(MOCK_USER_ID);
+      res.json(achievements);
     } catch (error) {
       console.error("Error fetching achievements:", error);
       res.status(500).json({ message: "Error fetching achievements" });
     }
   });
-  
-  // Create HTTP server and return it
+
+  // Create HTTP server
   const httpServer = createServer(app);
   
   return httpServer;
@@ -647,46 +714,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
  */
 async function updateJournalInsights(userId: number): Promise<void> {
   try {
-    // Get recent journal entries
-    const entries = await storage.getJournalEntries(userId, 30);
-    
-    // Extract themes
-    const themes = ai.extractJournalThemes(entries);
-    
-    // Get recent data for correlation analysis
+    // Fetch necessary data
+    const journals = await storage.getJournalEntries(userId, 30);
     const now = new Date();
     const startDate = format(subDays(now, 30), "yyyy-MM-dd");
     const endDate = format(now, "yyyy-MM-dd");
     
-    const moodData = await storage.getMoods(userId, startDate, endDate);
-    const sleepData = await storage.getSleep(userId, startDate, endDate);
-    const activityData = await storage.getActivity(userId, startDate, endDate);
+    const moods = (await storage.getMoods(userId, startDate, endDate)).moods;
+    const sleep = (await storage.getSleep(userId, startDate, endDate)).sleep;
+    const activity = (await storage.getActivity(userId, startDate, endDate)).activity;
     
-    // Find correlations
-    const correlations = ai.findJournalCorrelations(
-      moodData.moods,
-      sleepData.sleep,
-      activityData.activity,
-      entries
-    );
+    // Extract themes from journals
+    const themes = ai.extractJournalThemes(journals);
     
-    // Update or create journal insights
-    const insights = await storage.getJournalInsights(userId);
-    if (insights && insights.id) {
-      await db.update(schema.journalInsights)
-        .set({
-          themes: themes,
-          correlations: correlations,
-          lastUpdated: new Date().toISOString().split('T')[0]
-        })
-        .where(eq(schema.journalInsights.userId, userId))
-        .execute();
+    // Find correlations between data points
+    const correlations = ai.findJournalCorrelations(moods, sleep, activity, journals);
+    
+    // Get existing insights
+    const existingInsights = await storage.getJournalInsights(userId);
+    
+    if (existingInsights.themes.length > 0) {
+      // Update existing insights
+      await db.update(schema.journalInsights).set({
+        themes,
+        correlations,
+        // @ts-ignore
+        lastUpdated: new Date(),
+      }).where(eq(schema.journalInsights.userId, userId));
     } else {
+      // Create new insights
       await storage.insertJournalInsight({
         userId,
         themes,
         correlations,
-        lastUpdated: new Date().toISOString().split('T')[0]
+        // @ts-ignore
+        lastUpdated: new Date(),
       });
     }
   } catch (error) {
@@ -699,36 +761,24 @@ async function updateJournalInsights(userId: number): Promise<void> {
  */
 async function checkAndUpdateAchievements(userId: number): Promise<void> {
   try {
-    // Get user's current achievements
-    const achievementsData = await storage.getAllAchievements(userId);
-    const userAchievements = achievementsData.achievements;
-    
-    // Get recent data for achievement checks
+    // Fetch user data
+    const journals = await storage.getJournalEntries(userId, 30);
     const now = new Date();
     const startDate = format(subDays(now, 30), "yyyy-MM-dd");
     const endDate = format(now, "yyyy-MM-dd");
     
-    const moodData = await storage.getMoods(userId, startDate, endDate);
-    const sleepData = await storage.getSleep(userId, startDate, endDate);
-    const activityData = await storage.getActivity(userId, startDate, endDate);
-    const journals = await storage.getJournalEntries(userId, 30);
+    const moods = (await storage.getMoods(userId, startDate, endDate)).moods;
+    const sleep = (await storage.getSleep(userId, startDate, endDate)).sleep;
+    const activity = (await storage.getActivity(userId, startDate, endDate)).activity;
     
-    // Check for new achievements
-    const achievedIds = ai.checkAchievements(
-      moodData.moods,
-      sleepData.sleep,
-      activityData.activity,
-      journals
-    );
+    // Check which achievements have been unlocked
+    const achievedIds = ai.checkAchievements(moods, sleep, activity, journals);
     
-    // Update user achievements
-    for (const achievementId of achievedIds) {
-      const achievement = userAchievements.find(a => a.id === achievementId);
-      
-      if (achievement && !achievement.unlocked) {
+    if (achievedIds.length > 0) {
+      for (const achievementId of achievedIds) {
         await storage.updateUserAchievement(userId, achievementId, {
-          unlocked: true,
-          unlockedAt: new Date().toISOString()
+          achieved: true,
+          achievedAt: new Date()
         });
       }
     }
