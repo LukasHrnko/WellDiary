@@ -1,13 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-
-// Vytvořte type definition pro PaddleJS OCR
-interface PaddleOCRResult {
-  text: string;
-  confidence: number;
-  box: number[][];
-}
+import { createWorker } from 'tesseract.js';
 
 interface OCRResult {
   success: boolean;
@@ -22,34 +16,33 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 /**
- * Zpracuje obrázek pomocí PaddleJS OCR k extrakci textu.
+ * Zpracuje obrázek pomocí Tesseract.js s optimalizací pro rukopis.
  * 
  * @param imagePath Cesta k souboru obrázku
  * @returns Promise s výsledkem OCR obsahujícím text nebo chybu
  */
 export async function performPaddleOCR(imagePath: string): Promise<OCRResult> {
   try {
-    // Dynamicky importujte PaddleJS OCR 
-    // Přiřazení k proměnné model je důležité pro správné použití PaddleJS
-    const model = require('@paddlejs-models/ocr');
+    // Použijeme Tesseract.js jako alternativu k PaddleJS
+    // Ale s nastavením optimalizovaným pro rukopis
+    const worker = await createWorker('eng');
     
-    // Načtení obrázku jako buffer
-    const imageBuffer = fs.readFileSync(imagePath);
-    const imageBlob = new Blob([imageBuffer], { type: 'image/jpeg' });
+    // Nastavení parametrů pro lepší rozpoznávání rukopisu
+    await worker.setParameters({
+      tessedit_ocr_engine_mode: 2, // LSTM pouze
+      tessedit_pageseg_mode: 6,    // Režim segmentace pro jednotné bloky textu
+      preserve_interword_spaces: '1',
+      tessjs_create_hocr: '0',
+      tessjs_create_tsv: '0'
+    });
     
-    // Vytvoření instance OCR a inicializace
-    // PaddleJS OCR má globální objekt, který je potřeba použít
-    const ocr = model.paddle ? new model.paddle.ocr() : new model();
-    await ocr.init();
+    // Načtení a rozpoznání obrázku
+    const result = await worker.recognize(imagePath);
+    const text = result.data.text;
     
-    // Rozpoznání textu z obrázku
-    const result = await ocr.recognize(imageBlob);
+    // Ukončení workeru
+    await worker.terminate();
     
-    // Extrakce textu z výsledku
-    let textContent = '';
-    if (result && Array.isArray(result)) {
-      textContent = result.map((item: PaddleOCRResult) => item.text).join('\n');
-    }
     
     return {
       success: true,
