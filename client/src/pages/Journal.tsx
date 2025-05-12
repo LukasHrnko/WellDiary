@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -28,6 +30,7 @@ const Journal: React.FC = () => {
   const [activities, setActivities] = useState("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [ocrEngine, setOcrEngine] = useState<string>("standard");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -75,7 +78,12 @@ const Journal: React.FC = () => {
   // Upload journal photo mutation
   const uploadJournalMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch("/api/journal/upload", {
+      // Choose endpoint based on selected OCR engine
+      const endpoint = ocrEngine === "paddle" 
+        ? "/api/journal/upload/paddle" 
+        : "/api/journal/upload";
+        
+      const response = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
@@ -395,10 +403,26 @@ const Journal: React.FC = () => {
                   </div>
                 )}
                 
-                <p className="text-xs text-gray-400 mt-6">
-                  Our OCR technology will automatically extract text from your journal.
-                  For best results, ensure your handwriting is clear and the image is well-lit.
-                </p>
+                <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">OCR Engine</h3>
+                    <RadioGroup defaultValue="standard" value={ocrEngine} onValueChange={setOcrEngine}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="standard" id="r1" />
+                        <Label htmlFor="r1">Standard OCR</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="paddle" id="r2" />
+                        <Label htmlFor="r2">PaddleJS OCR (Better for handwriting)</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                  
+                  <p className="text-xs text-gray-400">
+                    Our OCR technology will automatically extract text from your journal.
+                    For best results, ensure your handwriting is clear and the image is well-lit.
+                  </p>
+                </div>
                 
                 {uploadedFile && (
                   <Button 
