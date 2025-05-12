@@ -18,6 +18,56 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Mock user ID for demonstration (in a real app, this would come from auth)
 const MOCK_USER_ID = 1;
 
+/**
+ * Safely parse a date string and return a valid ISO date string
+ * If parsing fails, return today's date as ISO string
+ * 
+ * @param dateStr Date string to parse
+ * @returns ISO date string (YYYY-MM-DD)
+ */
+function safeParseDate(dateStr: string | undefined): string {
+  try {
+    if (!dateStr) {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    // Try to detect and fix common date formats
+    let normalizedDate = dateStr;
+    
+    // Handle "Month DD, YYYY" format (e.g. "September 22, 2020")
+    const monthNameMatch = dateStr.match(/([A-Za-z]+)\s+(\d{1,2})[\s,]+(\d{4})/);
+    if (monthNameMatch) {
+      const months: Record<string, number> = {
+        january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+        july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+      };
+      
+      const monthName = monthNameMatch[1].toLowerCase();
+      const day = parseInt(monthNameMatch[2], 10);
+      const year = parseInt(monthNameMatch[3], 10);
+      
+      if (months[monthName] !== undefined && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+        const date = new Date(year, months[monthName], day);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+      }
+    }
+    
+    // Check various date formats
+    const parsedDate = new Date(normalizedDate);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString().split('T')[0];
+    }
+    
+    // Fallback to current date
+    return new Date().toISOString().split('T')[0];
+  } catch (error) {
+    console.error('Error parsing date:', error);
+    return new Date().toISOString().split('T')[0];
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint
   app.get("/api/health", (_req: Request, res: Response) => {
@@ -137,10 +187,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract structured data from OCR text
       const journalData = ocr.extractJournalData(ocrResult.text);
       
-      // Save to database
-      const date = journalData.date 
-        ? new Date(journalData.date).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      // Save to database using safe date parsing
+      const date = safeParseDate(journalData.date);
       
       // Create journal entry
       const journal = await storage.insertJournal({
