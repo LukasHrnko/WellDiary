@@ -27,13 +27,9 @@ export async function performPaddleOCR(imagePath: string): Promise<OCRResult> {
     // Ale s nastavením optimalizovaným pro rukopis
     const worker = await createWorker('eng');
     
-    // Nastavení parametrů pro lepší rozpoznávání rukopisu
+    // Nastavení parametrů pro lepší rozpoznávání rukopisu - specializované na rozpoznání rukopisu
     await worker.setParameters({
-      tessedit_ocr_engine_mode: 2, // LSTM pouze
-      tessedit_pageseg_mode: 6,    // Režim segmentace pro jednotné bloky textu
-      preserve_interword_spaces: '1',
-      tessjs_create_hocr: '0',
-      tessjs_create_tsv: '0'
+      preserve_interword_spaces: '1'
     });
     
     // Načtení a rozpoznání obrázku
@@ -43,10 +39,9 @@ export async function performPaddleOCR(imagePath: string): Promise<OCRResult> {
     // Ukončení workeru
     await worker.terminate();
     
-    
     return {
       success: true,
-      text: textContent
+      text: text
     };
   } catch (error) {
     console.error('PaddleJS OCR processing error:', error);
