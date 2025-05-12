@@ -211,6 +211,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Upload and process journal image with PaddleJS OCR
+  app.post("/api/journal/upload/paddle", upload.single("journal"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Save uploaded image to temp file
+      const imagePath = paddleocr.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      // Perform OCR using PaddleJS
+      const ocrResult = await paddleocr.performPaddleOCR(imagePath);
+      
+      if (!ocrResult.success) {
+        paddleocr.cleanupImage(imagePath);
+        return res.status(500).json({ message: ocrResult.error || "PaddleJS OCR processing failed" });
+      }
+      
+      // Extract structured data from OCR text using the same extraction logic
+      const journalData = ocr.extractJournalData(ocrResult.text);
+      
+      // Save to database
+      const date = journalData.date 
+        ? new Date(journalData.date).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      
+      // Create journal entry
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: journalData.content,
+        date,
+        imageUrl: null // We don't store the actual image, just the extracted content
+      });
+      
+      // Create mood entry if extracted
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Create sleep entry if extracted
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
+      // Save activities if extracted
+      if (journalData.activities.length > 0) {
+        // Calculate steps estimate based on activities
+        const hasExercise = journalData.activities.some(activity => 
+          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
+            activity.toLowerCase().includes(term)
+          )
+        );
+        
+        // Create an activity entry with an estimated step count
+        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
+        
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps,
+          date
+        });
+      }
+      
+      // Clean up temp file
+      paddleocr.cleanupImage(imagePath);
+      
+      // Generate journal insights
+      await updateJournalInsights(MOCK_USER_ID);
+      
+      // Check for new achievements
+      await checkAndUpdateAchievements(MOCK_USER_ID);
+      
+      res.json({ 
+        success: true, 
+        message: "Journal processed successfully with PaddleJS OCR",
+        journal
+      });
+    } catch (error) {
+      console.error("Error processing journal with PaddleJS:", error);
+      res.status(500).json({ message: "Failed to process journal with PaddleJS" });
+    }
+  });
+  
   // Get journal insights
   app.get("/api/journal/insights", async (_req, res) => {
     try {

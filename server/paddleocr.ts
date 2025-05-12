@@ -29,16 +29,17 @@ if (!fs.existsSync(uploadDir)) {
  */
 export async function performPaddleOCR(imagePath: string): Promise<OCRResult> {
   try {
-    // Dynamicky importujte PaddleJS OCR (kvůli problémům s přímým importem)
-    const paddleOCR = await import('@paddlejs-models/ocr');
+    // Dynamicky importujte PaddleJS OCR 
+    // Přiřazení k proměnné model je důležité pro správné použití PaddleJS
+    const model = require('@paddlejs-models/ocr');
     
     // Načtení obrázku jako buffer
     const imageBuffer = fs.readFileSync(imagePath);
     const imageBlob = new Blob([imageBuffer], { type: 'image/jpeg' });
     
     // Vytvoření instance OCR a inicializace
-    // Podle dokumentace PaddleJS OCR je toto správný způsob použití knihovny
-    const ocr = new paddleOCR.default();
+    // PaddleJS OCR má globální objekt, který je potřeba použít
+    const ocr = model.paddle ? new model.paddle.ocr() : new model();
     await ocr.init();
     
     // Rozpoznání textu z obrázku
