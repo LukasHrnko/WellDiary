@@ -1,4 +1,4 @@
-import { createWorker } from 'tesseract.js';
+import * as tesseract from 'node-tesseract-ocr';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -23,25 +23,27 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Configure OCR options
+const config = {
+  lang: 'eng', // language
+  oem: 1, // OCR Engine Mode
+  psm: 3, // Page Segmentation Mode
+};
+
 /**
- * Process an image file using OCR to extract text.
+ * Process an image file using node-tesseract-ocr to extract text.
  * 
  * @param imagePath Path to the image file
  * @returns Promise with OCR result containing text or error
  */
 export async function performOCR(imagePath: string): Promise<OCRResult> {
   try {
-    // Use a simpler approach with createWorker without extra config
-    // that causes type errors with the current version of tesseract.js
-    const worker = await createWorker();
-    
-    // Recognize text directly - the worker will detect language
-    const { data } = await worker.recognize(imagePath);
-    await worker.terminate();
+    // Recognize text from image
+    const text = await tesseract.recognize(imagePath, config);
     
     return {
       success: true,
-      text: data.text
+      text: text
     };
   } catch (error) {
     console.error('OCR processing error:', error);
