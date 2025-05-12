@@ -79,9 +79,13 @@ const Journal: React.FC = () => {
   const uploadJournalMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       // Choose endpoint based on selected OCR engine
-      const endpoint = ocrEngine === "paddle" 
-        ? "/api/journal/upload/paddle" 
-        : "/api/journal/upload";
+      let endpoint = "/api/journal/upload";
+      
+      if (ocrEngine === "paddle") {
+        endpoint = "/api/journal/upload/paddle";
+      } else if (ocrEngine === "webai") {
+        endpoint = "/api/journal/upload/webai";
+      }
         
       const response = await fetch(endpoint, {
         method: "POST",
@@ -414,6 +418,10 @@ const Journal: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="paddle" id="r2" />
                         <Label htmlFor="r2">PaddleJS OCR (Better for handwriting)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="webai" id="r3" />
+                        <Label htmlFor="r3">Web AI Toolkit OCR (Advanced AI model)</Label>
                       </div>
                     </RadioGroup>
                   </div>

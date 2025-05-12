@@ -1,10 +1,11 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import * as storage from "./storage";
 import * as ocr from "./ocr";
 import * as paddleocr from "./paddleocr";
+import * as webaiocr from "./webai-ocr";
 import * as ai from "./ai";
 import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -19,58 +20,69 @@ const MOCK_USER_ID = 1;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
 
   // === Journal Routes ===
   
   // Get journal entries
-  app.get("/api/journal/entries", async (_req, res) => {
+  app.get("/api/journal/entries", async (_req: Request, res: Response) => {
     try {
       const entries = await storage.getJournalEntries(MOCK_USER_ID);
       res.json({ entries });
     } catch (error) {
       console.error("Error fetching journal entries:", error);
-      res.status(500).json({ message: "Failed to fetch journal entries" });
+      res.status(500).json({ message: "Error fetching journal entries" });
     }
   });
   
-  // Add manual journal entry
-  app.post("/api/journal/entry", async (req, res) => {
+  // Get last journal upload date
+  app.get("/api/journal/last-upload", async (_req: Request, res: Response) => {
     try {
-      const { content, mood, sleep, activities, date } = req.body;
+      const result = await storage.getLastJournalUpload(MOCK_USER_ID);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching last journal upload:", error);
+      res.status(500).json({ message: "Error fetching last journal upload" });
+    }
+  });
+  
+  // Add journal entry
+  app.post("/api/journal/entry", async (req: Request, res: Response) => {
+    try {
+      const date = format(new Date(req.body.date), "yyyy-MM-dd");
       
       // Create journal entry
-      const formattedDate = date || new Date().toISOString().split('T')[0];
-      
       const journal = await storage.insertJournal({
         userId: MOCK_USER_ID,
-        content,
-        date: formattedDate,
+        content: req.body.content,
+        date,
         imageUrl: null
       });
       
       // Create mood entry if provided
-      if (typeof mood === 'number') {
+      if (req.body.mood) {
         await storage.insertMood({
           userId: MOCK_USER_ID,
-          value: mood,
-          date: formattedDate
+          value: parseInt(req.body.mood),
+          date
         });
       }
       
       // Create sleep entry if provided
-      if (typeof sleep === 'number') {
+      if (req.body.sleep) {
         await storage.insertSleep({
           userId: MOCK_USER_ID,
-          hours: sleep,
-          date: formattedDate
+          hours: parseFloat(req.body.sleep),
+          date
         });
       }
       
       // Create activity entry if activities provided
-      if (activities && activities.length > 0) {
+      if (req.body.activities) {
+        const activities = req.body.activities.split(',').map((a: string) => a.trim());
+        
         // Calculate steps estimate based on activities
         const hasExercise = activities.some(activity => 
           ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
@@ -84,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.insertActivity({
           userId: MOCK_USER_ID,
           steps,
-          date: formattedDate
+          date
         });
       }
       
@@ -94,30 +106,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for new achievements
       await checkAndUpdateAchievements(MOCK_USER_ID);
       
-      res.json({ 
-        success: true, 
-        message: "Journal entry added successfully",
-        journal
-      });
+      res.status(201).json({ success: true, journal });
     } catch (error) {
       console.error("Error adding journal entry:", error);
-      res.status(500).json({ message: "Failed to add journal entry" });
-    }
-  });
-  
-  // Get last journal upload date
-  app.get("/api/journal/last-upload", async (_req, res) => {
-    try {
-      const lastUpload = await storage.getLastJournalUpload(MOCK_USER_ID);
-      res.json(lastUpload);
-    } catch (error) {
-      console.error("Error fetching last journal upload:", error);
-      res.status(500).json({ message: "Failed to fetch last journal upload" });
+      res.status(500).json({ message: "Error adding journal entry" });
     }
   });
   
   // Upload and process journal image
-  app.post("/api/journal/upload", upload.single("journal"), async (req, res) => {
+  app.post("/api/journal/upload", upload.single("journal"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -129,7 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.file.originalname
       );
       
-      // Perform OCR
+      // Perform OCR on the image
       const ocrResult = await ocr.performOCR(imagePath);
       
       if (!ocrResult.success) {
@@ -174,7 +171,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Save activities if extracted
       if (journalData.activities.length > 0) {
         // Calculate steps estimate based on activities
-        // This is very rough - in a real app we'd use a more sophisticated method
         const hasExercise = journalData.activities.some(activity => 
           ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
             activity.toLowerCase().includes(term)
@@ -212,7 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Upload and process journal image with PaddleJS OCR
-  app.post("/api/journal/upload/paddle", upload.single("journal"), async (req, res) => {
+  app.post("/api/journal/upload/paddle", upload.single("journal"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -300,371 +296,349 @@ export async function registerRoutes(app: Express): Promise<Server> {
         journal
       });
     } catch (error) {
-      console.error("Error processing journal with PaddleJS:", error);
-      res.status(500).json({ message: "Failed to process journal with PaddleJS" });
+      console.error("PaddleJS OCR processing error:", error);
+      res.status(500).json({ message: "Failed to process journal with PaddleJS OCR" });
     }
   });
   
-  // Get journal insights
-  app.get("/api/journal/insights", async (_req, res) => {
+  // Upload and process journal image with Web AI Toolkit OCR
+  app.post("/api/journal/upload/webai", upload.single("journal"), async (req: Request, res: Response) => {
     try {
-      const insights = await storage.getJournalInsights(MOCK_USER_ID);
-      res.json(insights);
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Save uploaded image to temp file
+      const imagePath = webaiocr.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      // Perform OCR using Web AI Toolkit
+      const ocrResult = await webaiocr.performWebAiOCR(imagePath);
+      
+      if (!ocrResult.success) {
+        webaiocr.cleanupImage(imagePath);
+        return res.status(500).json({ message: ocrResult.error || "Web AI Toolkit OCR processing failed" });
+      }
+      
+      // Extract structured data from OCR text using the same extraction logic
+      const journalData = ocr.extractJournalData(ocrResult.text);
+      
+      // Save to database
+      const date = journalData.date 
+        ? new Date(journalData.date).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      
+      // Create journal entry
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: journalData.content,
+        date,
+        imageUrl: null // We don't store the actual image, just the extracted content
+      });
+      
+      // Create mood entry if extracted
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Create sleep entry if extracted
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
+      // Save activities if extracted
+      if (journalData.activities.length > 0) {
+        // Calculate steps estimate based on activities
+        const hasExercise = journalData.activities.some(activity => 
+          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
+            activity.toLowerCase().includes(term)
+          )
+        );
+        
+        // Create an activity entry with an estimated step count
+        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
+        
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps,
+          date
+        });
+      }
+      
+      // Clean up temp file
+      webaiocr.cleanupImage(imagePath);
+      
+      // Generate journal insights
+      await updateJournalInsights(MOCK_USER_ID);
+      
+      // Check for new achievements
+      await checkAndUpdateAchievements(MOCK_USER_ID);
+      
+      res.json({ 
+        success: true, 
+        message: "Journal processed successfully with Web AI Toolkit OCR",
+        journal
+      });
     } catch (error) {
-      console.error("Error fetching journal insights:", error);
-      res.status(500).json({ message: "Failed to fetch journal insights" });
+      console.error("Web AI Toolkit OCR processing error:", error);
+      res.status(500).json({ message: "Failed to process journal with Web AI Toolkit OCR" });
     }
   });
   
   // === Mood Routes ===
   
-  // Get mood data for a date range
-  app.get("/api/mood", async (req, res) => {
+  // Get mood data
+  app.get("/api/mood", async (_req: Request, res: Response) => {
     try {
-      const startDate = req.query.startDate as string || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const endDate = req.query.endDate as string || format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const now = new Date();
+      const startDate = format(startOfWeek(now), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
       
+      // Get mood data for the current week
       const moodData = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
-      res.json(moodData);
+      
+      // Get previous week data for comparison
+      const prevWeekStart = format(startOfWeek(subDays(now, 7)), "yyyy-MM-dd");
+      const prevWeekEnd = format(subDays(startOfWeek(now), 1), "yyyy-MM-dd");
+      const prevWeekData = await storage.getMoods(MOCK_USER_ID, prevWeekStart, prevWeekEnd);
+      
+      // Calculate weekly change
+      const weeklyChange = moodData.average - prevWeekData.average;
+      
+      res.json({ ...moodData, weeklyChange });
     } catch (error) {
       console.error("Error fetching mood data:", error);
-      res.status(500).json({ message: "Failed to fetch mood data" });
+      res.status(500).json({ message: "Error fetching mood data" });
     }
   });
   
-  // Get monthly mood data
-  app.get("/api/mood/monthly", async (req, res) => {
+  // Add mood entry
+  app.post("/api/mood", async (req: Request, res: Response) => {
     try {
-      const startDate = req.query.startDate as string || format(subDays(new Date(), 30), 'yyyy-MM-dd');
-      const endDate = req.query.endDate as string || format(new Date(), 'yyyy-MM-dd');
+      const date = format(new Date(req.body.date), "yyyy-MM-dd");
       
-      const moodData = await storage.getMonthlyMoodData(MOCK_USER_ID, startDate, endDate);
-      res.json(moodData);
-    } catch (error) {
-      console.error("Error fetching monthly mood data:", error);
-      res.status(500).json({ message: "Failed to fetch monthly mood data" });
-    }
-  });
-  
-  // Log new mood entry
-  app.post("/api/mood", async (req, res) => {
-    try {
-      const { value, date } = req.body;
-      
-      if (typeof value !== 'number' || value < 0 || value > 100) {
-        return res.status(400).json({ message: "Invalid mood value. Must be between 0 and 100." });
-      }
-      
-      const moodEntry = await storage.insertMood({
+      const mood = await storage.insertMood({
         userId: MOCK_USER_ID,
-        value,
-        date: date || new Date().toISOString().split('T')[0]
+        value: parseInt(req.body.value),
+        date
       });
       
-      // Check for achievements after adding mood
-      await checkAndUpdateAchievements(MOCK_USER_ID);
-      
-      res.json({ success: true, mood: moodEntry });
+      res.status(201).json(mood);
     } catch (error) {
-      console.error("Error saving mood:", error);
-      res.status(500).json({ message: "Failed to save mood" });
+      console.error("Error adding mood entry:", error);
+      res.status(500).json({ message: "Error adding mood entry" });
     }
   });
   
   // === Sleep Routes ===
   
-  // Get sleep data for a date range
-  app.get("/api/sleep", async (req, res) => {
+  // Get sleep data
+  app.get("/api/sleep", async (_req: Request, res: Response) => {
     try {
-      const startDate = req.query.startDate as string || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const endDate = req.query.endDate as string || format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const now = new Date();
+      const startDate = format(startOfWeek(now), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
       
-      const sleepData = await storage.getWeeklySleep(MOCK_USER_ID, endDate);
-      res.json(sleepData);
+      // Get sleep data for the current week
+      const sleepData = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
+      
+      // Get previous week data for comparison
+      const prevWeekStart = format(startOfWeek(subDays(now, 7)), "yyyy-MM-dd");
+      const prevWeekEnd = format(subDays(startOfWeek(now), 1), "yyyy-MM-dd");
+      const prevWeekData = await storage.getSleep(MOCK_USER_ID, prevWeekStart, prevWeekEnd);
+      
+      // Calculate weekly change
+      const weeklyChange = sleepData.average - prevWeekData.average;
+      
+      res.json({ ...sleepData, weeklyChange });
     } catch (error) {
       console.error("Error fetching sleep data:", error);
-      res.status(500).json({ message: "Failed to fetch sleep data" });
+      res.status(500).json({ message: "Error fetching sleep data" });
     }
   });
   
-  // Get monthly sleep data
-  app.get("/api/sleep/monthly", async (req, res) => {
+  // Add sleep entry
+  app.post("/api/sleep", async (req: Request, res: Response) => {
     try {
-      const startDate = req.query.startDate as string || format(subDays(new Date(), 30), 'yyyy-MM-dd');
-      const endDate = req.query.endDate as string || format(new Date(), 'yyyy-MM-dd');
+      const date = format(new Date(req.body.date), "yyyy-MM-dd");
       
-      const sleepData = await storage.getMonthlySleepData(MOCK_USER_ID, startDate, endDate);
-      res.json(sleepData);
-    } catch (error) {
-      console.error("Error fetching monthly sleep data:", error);
-      res.status(500).json({ message: "Failed to fetch monthly sleep data" });
-    }
-  });
-  
-  // Log new sleep entry
-  app.post("/api/sleep", async (req, res) => {
-    try {
-      const { hours, date } = req.body;
-      
-      if (typeof hours !== 'number' || hours < 0 || hours > 24) {
-        return res.status(400).json({ message: "Invalid sleep hours. Must be between 0 and 24." });
-      }
-      
-      const sleepEntry = await storage.insertSleep({
+      const sleep = await storage.insertSleep({
         userId: MOCK_USER_ID,
-        hours,
-        date: date || new Date().toISOString().split('T')[0]
+        hours: parseFloat(req.body.hours),
+        date
       });
       
-      // Check for achievements after adding sleep
-      await checkAndUpdateAchievements(MOCK_USER_ID);
-      
-      res.json({ success: true, sleep: sleepEntry });
+      res.status(201).json(sleep);
     } catch (error) {
-      console.error("Error saving sleep:", error);
-      res.status(500).json({ message: "Failed to save sleep" });
+      console.error("Error adding sleep entry:", error);
+      res.status(500).json({ message: "Error adding sleep entry" });
     }
   });
   
   // === Activity Routes ===
   
-  // Get activity data for a date range
-  app.get("/api/activity", async (req, res) => {
+  // Get activity data
+  app.get("/api/activity", async (_req: Request, res: Response) => {
     try {
-      const startDate = req.query.startDate as string || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const endDate = req.query.endDate as string || format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const now = new Date();
+      const startDate = format(startOfWeek(now), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
       
-      const activityData = await storage.getWeeklyActivity(MOCK_USER_ID, endDate);
-      res.json(activityData);
+      // Get activity data for the current week
+      const activityData = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
+      
+      // Get previous week data for comparison
+      const prevWeekStart = format(startOfWeek(subDays(now, 7)), "yyyy-MM-dd");
+      const prevWeekEnd = format(subDays(startOfWeek(now), 1), "yyyy-MM-dd");
+      const prevWeekData = await storage.getActivity(MOCK_USER_ID, prevWeekStart, prevWeekEnd);
+      
+      // Calculate weekly change
+      const weeklyChange = activityData.average - prevWeekData.average;
+      
+      res.json({ ...activityData, weeklyChange });
     } catch (error) {
       console.error("Error fetching activity data:", error);
-      res.status(500).json({ message: "Failed to fetch activity data" });
+      res.status(500).json({ message: "Error fetching activity data" });
     }
   });
   
-  // Get monthly activity data
-  app.get("/api/activity/monthly", async (req, res) => {
+  // Add activity entry
+  app.post("/api/activity", async (req: Request, res: Response) => {
     try {
-      const startDate = req.query.startDate as string || format(subDays(new Date(), 30), 'yyyy-MM-dd');
-      const endDate = req.query.endDate as string || format(new Date(), 'yyyy-MM-dd');
+      const date = format(new Date(req.body.date), "yyyy-MM-dd");
       
-      const activityData = await storage.getMonthlyActivityData(MOCK_USER_ID, startDate, endDate);
-      res.json(activityData);
-    } catch (error) {
-      console.error("Error fetching monthly activity data:", error);
-      res.status(500).json({ message: "Failed to fetch monthly activity data" });
-    }
-  });
-  
-  // Log new activity entry
-  app.post("/api/activity", async (req, res) => {
-    try {
-      const { steps, date } = req.body;
-      
-      if (typeof steps !== 'number' || steps < 0) {
-        return res.status(400).json({ message: "Invalid steps value. Must be a positive number." });
-      }
-      
-      const activityEntry = await storage.insertActivity({
+      const activity = await storage.insertActivity({
         userId: MOCK_USER_ID,
-        steps,
-        date: date || new Date().toISOString().split('T')[0]
+        steps: parseInt(req.body.steps),
+        date
       });
       
-      // Check for achievements after adding activity
-      await checkAndUpdateAchievements(MOCK_USER_ID);
-      
-      res.json({ success: true, activity: activityEntry });
+      res.status(201).json(activity);
     } catch (error) {
-      console.error("Error saving activity:", error);
-      res.status(500).json({ message: "Failed to save activity" });
+      console.error("Error adding activity entry:", error);
+      res.status(500).json({ message: "Error adding activity entry" });
+    }
+  });
+  
+  // === Journal Insights Routes ===
+  
+  // Get journal insights
+  app.get("/api/journal/insights", async (_req: Request, res: Response) => {
+    try {
+      const insights = await storage.getJournalInsights(MOCK_USER_ID);
+      res.json(insights);
+    } catch (error) {
+      console.error("Error fetching journal insights:", error);
+      res.status(500).json({ message: "Error fetching journal insights" });
     }
   });
   
   // === Tips Routes ===
   
   // Get personalized tips
-  app.get("/api/tips", async (_req, res) => {
+  app.get("/api/tips", async (_req: Request, res: Response) => {
     try {
-      // Get recent data to generate personalized tips
-      const today = new Date();
-      const oneMonthAgo = subDays(today, 30);
-      const startDate = format(oneMonthAgo, 'yyyy-MM-dd');
-      const endDate = format(today, 'yyyy-MM-dd');
+      // Generate fresh tips based on latest data
+      const now = new Date();
+      const startDate = format(subDays(now, 30), "yyyy-MM-dd");
+      const endDate = format(now, "yyyy-MM-dd");
       
-      // Fetch user data
-      const { moods } = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
-      const { sleep } = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
-      const { activity } = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
+      // Get recent data
+      const moodData = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
+      const sleepData = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
+      const activityData = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
       const journals = await storage.getJournalEntries(MOCK_USER_ID, 10);
       
-      // Generate personalized tips
-      const personalizedTips = ai.generatePersonalizedTips(MOCK_USER_ID, moods, sleep, activity, journals);
+      // Generate tips based on data trends
+      const tips = ai.generatePersonalizedTips(
+        MOCK_USER_ID,
+        moodData.moods,
+        sleepData.sleep,
+        activityData.activity,
+        journals
+      );
       
-      // If we don't have enough personalized tips, get some generic ones from the database
-      if (personalizedTips.length < 3) {
-        const additionalTips = await storage.getTips(MOCK_USER_ID, 3 - personalizedTips.length);
-        res.json({ tips: [...personalizedTips, ...additionalTips] });
-      } else {
-        res.json({ tips: personalizedTips });
-      }
+      res.json({ tips });
     } catch (error) {
       console.error("Error fetching tips:", error);
-      res.status(500).json({ message: "Failed to fetch tips" });
-    }
-  });
-  
-  // Get all tips
-  app.get("/api/tips/all", async (_req, res) => {
-    try {
-      const tipsData = await storage.getAllTips();
-      res.json(tipsData);
-    } catch (error) {
-      console.error("Error fetching all tips:", error);
-      res.status(500).json({ message: "Failed to fetch all tips" });
+      res.status(500).json({ message: "Error fetching tips" });
     }
   });
   
   // === Achievements Routes ===
   
-  // Get achievements for dashboard
-  app.get("/api/achievements", async (_req, res) => {
-    try {
-      const achievements = await storage.getAchievements(MOCK_USER_ID);
-      res.json({ achievements });
-    } catch (error) {
-      console.error("Error fetching achievements:", error);
-      res.status(500).json({ message: "Failed to fetch achievements" });
-    }
-  });
-  
-  // Get all achievements
-  app.get("/api/achievements/all", async (_req, res) => {
+  // Get achievements
+  app.get("/api/achievements", async (_req: Request, res: Response) => {
     try {
       const achievementsData = await storage.getAllAchievements(MOCK_USER_ID);
       res.json(achievementsData);
     } catch (error) {
-      console.error("Error fetching all achievements:", error);
-      res.status(500).json({ message: "Failed to fetch all achievements" });
+      console.error("Error fetching achievements:", error);
+      res.status(500).json({ message: "Error fetching achievements" });
     }
   });
   
-  // === Settings Routes ===
-  
-  // Get user settings
-  app.get("/api/settings", async (_req, res) => {
-    try {
-      const userSettings = await storage.getSettings(MOCK_USER_ID);
-      
-      if (!userSettings) {
-        return res.status(404).json({ message: "Settings not found" });
-      }
-      
-      // Format settings for the frontend
-      const formattedSettings = {
-        profile: {
-          name: userSettings.name,
-          email: userSettings.email,
-        },
-        preferences: {
-          weeklyReminders: userSettings.weeklyReminders,
-          journalPrompts: userSettings.journalPrompts,
-          uploadDay: userSettings.uploadDay,
-        },
-        goals: {
-          sleepHours: userSettings.sleepGoal,
-          dailySteps: userSettings.stepsGoal,
-          journalFrequency: userSettings.journalFrequency,
-        }
-      };
-      
-      res.json(formattedSettings);
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-      res.status(500).json({ message: "Failed to fetch settings" });
-    }
-  });
-  
-  // Update user settings
-  app.put("/api/settings", async (req, res) => {
-    try {
-      const { profile, preferences, goals } = req.body;
-      
-      if (!profile || !preferences || !goals) {
-        return res.status(400).json({ message: "Invalid settings data" });
-      }
-      
-      // Format settings for the database
-      const settingsData = {
-        name: profile.name,
-        email: profile.email,
-        weeklyReminders: preferences.weeklyReminders,
-        journalPrompts: preferences.journalPrompts,
-        uploadDay: preferences.uploadDay,
-        sleepGoal: goals.sleepHours,
-        stepsGoal: goals.dailySteps,
-        journalFrequency: goals.journalFrequency,
-      };
-      
-      // Update settings
-      const updatedSettings = await storage.updateSettings(MOCK_USER_ID, settingsData);
-      
-      res.json({ success: true, settings: updatedSettings });
-    } catch (error) {
-      console.error("Error updating settings:", error);
-      res.status(500).json({ message: "Failed to update settings" });
-    }
-  });
-
+  // Create HTTP server and return it
   const httpServer = createServer(app);
+  
   return httpServer;
 }
 
-// Helper Functions
-
 /**
- * Updates journal insights based on recent user data
+ * Update journal insights based on recent entries
  */
 async function updateJournalInsights(userId: number): Promise<void> {
   try {
-    // Get recent data
-    const today = new Date();
-    const oneMonthAgo = subDays(today, 30);
-    const startDate = format(oneMonthAgo, 'yyyy-MM-dd');
-    const endDate = format(today, 'yyyy-MM-dd');
+    // Get recent journal entries
+    const entries = await storage.getJournalEntries(userId, 30);
     
-    // Fetch user data
-    const { moods } = await storage.getMoods(userId, startDate, endDate);
-    const { sleep } = await storage.getSleep(userId, startDate, endDate);
-    const { activity } = await storage.getActivity(userId, startDate, endDate);
-    const journals = await storage.getJournalEntries(userId, 10);
+    // Extract themes
+    const themes = ai.extractJournalThemes(entries);
     
-    // Extract themes and correlations
-    const themes = ai.extractJournalThemes(journals);
-    const correlations = ai.findJournalCorrelations(moods, sleep, activity, journals);
+    // Get recent data for correlation analysis
+    const now = new Date();
+    const startDate = format(subDays(now, 30), "yyyy-MM-dd");
+    const endDate = format(now, "yyyy-MM-dd");
     
-    // Check if insights already exist
-    const existingInsights = await db
-      .select()
-      .from(schema.journalInsights)
-      .where(eq(schema.journalInsights.userId, userId));
+    const moodData = await storage.getMoods(userId, startDate, endDate);
+    const sleepData = await storage.getSleep(userId, startDate, endDate);
+    const activityData = await storage.getActivity(userId, startDate, endDate);
     
-    if (existingInsights.length > 0) {
-      // Update existing insights
-      await db
-        .update(schema.journalInsights)
+    // Find correlations
+    const correlations = ai.findJournalCorrelations(
+      moodData.moods,
+      sleepData.sleep,
+      activityData.activity,
+      entries
+    );
+    
+    // Update or create journal insights
+    const insights = await storage.getJournalInsights(userId);
+    if (insights && insights.id) {
+      await db.update(schema.journalInsights)
         .set({
-          themes,
-          correlations,
-          updatedAt: new Date().toISOString()
+          themes: themes,
+          correlations: correlations,
+          lastUpdated: new Date().toISOString().split('T')[0]
         })
-        .where(eq(schema.journalInsights.userId, userId));
+        .where(eq(schema.journalInsights.userId, userId))
+        .execute();
     } else {
-      // Create new insights
       await storage.insertJournalInsight({
         userId,
         themes,
-        correlations
+        correlations,
+        lastUpdated: new Date().toISOString().split('T')[0]
       });
     }
   } catch (error) {
@@ -677,33 +651,34 @@ async function updateJournalInsights(userId: number): Promise<void> {
  */
 async function checkAndUpdateAchievements(userId: number): Promise<void> {
   try {
-    // Get user data
-    const today = new Date();
-    const oneMonthAgo = subDays(today, 30);
-    const startDate = format(oneMonthAgo, 'yyyy-MM-dd');
-    const endDate = format(today, 'yyyy-MM-dd');
+    // Get user's current achievements
+    const achievementsData = await storage.getAllAchievements(userId);
+    const userAchievements = achievementsData.achievements;
     
-    const { moods } = await storage.getMoods(userId, startDate, endDate);
-    const { sleep } = await storage.getSleep(userId, startDate, endDate);
-    const { activity } = await storage.getActivity(userId, startDate, endDate);
-    const journals = await storage.getJournalEntries(userId, 10);
+    // Get recent data for achievement checks
+    const now = new Date();
+    const startDate = format(subDays(now, 30), "yyyy-MM-dd");
+    const endDate = format(now, "yyyy-MM-dd");
+    
+    const moodData = await storage.getMoods(userId, startDate, endDate);
+    const sleepData = await storage.getSleep(userId, startDate, endDate);
+    const activityData = await storage.getActivity(userId, startDate, endDate);
+    const journals = await storage.getJournalEntries(userId, 30);
     
     // Check for new achievements
-    const achievedIds = ai.checkAchievements(moods, sleep, activity, journals);
+    const achievedIds = ai.checkAchievements(
+      moodData.moods,
+      sleepData.sleep,
+      activityData.activity,
+      journals
+    );
     
-    if (achievedIds.length === 0) {
-      return;
-    }
-    
-    // Get current achievements
-    const { achievements } = await storage.getAllAchievements(userId);
-    
-    // Update user achievements that are newly completed
-    for (const achievedId of achievedIds) {
-      const achievement = achievements.find(a => a.id === achievedId);
+    // Update user achievements
+    for (const achievementId of achievedIds) {
+      const achievement = userAchievements.find(a => a.id === achievementId);
       
       if (achievement && !achievement.unlocked) {
-        await storage.updateUserAchievement(userId, achievedId, {
+        await storage.updateUserAchievement(userId, achievementId, {
           unlocked: true,
           unlockedAt: new Date().toISOString()
         });
