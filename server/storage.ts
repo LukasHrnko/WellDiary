@@ -8,6 +8,7 @@ import {
   activity,
   tips,
   achievements,
+  userAchievements,
   journalInsights,
   InsertUser,
   InsertJournal,
@@ -16,6 +17,7 @@ import {
   InsertActivity,
   InsertTip,
   InsertAchievement,
+  InsertUserAchievement,
   InsertJournalInsight,
   InsertSettings,
   User,
@@ -556,7 +558,7 @@ export async function updateUserAchievement(userId: number, achievementId: strin
     .update(userAchievements)
     .set({
       ...data,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date() // Automatically converted to ISO string by Drizzle
     })
     .where(
       and(

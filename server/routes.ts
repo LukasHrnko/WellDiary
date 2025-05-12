@@ -603,18 +603,15 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
     // Get current achievements
     const { achievements } = await storage.getAllAchievements(userId);
     
-    // Update achievements that are newly completed
+    // Update user achievements that are newly completed
     for (const achievedId of achievedIds) {
       const achievement = achievements.find(a => a.id === achievedId);
       
       if (achievement && !achievement.unlocked) {
-        await db
-          .update(schema.achievements)
-          .set({
-            unlocked: true,
-            unlockedAt: new Date().toISOString()
-          })
-          .where(eq(schema.achievements.id, achievedId));
+        await storage.updateUserAchievement(userId, achievedId, {
+          unlocked: true,
+          unlockedAt: new Date().toISOString()
+        });
       }
     }
   } catch (error) {
