@@ -29,21 +29,42 @@ export async function performWebAiOCR(imagePath: string): Promise<OCRResult> {
       lang: 'eng',
       oem: 1, // Neural net LSTM engine only
       psm: 6, // Assume a single uniform block of text
-      dpi: 300, // Higher DPI for better quality
-      load_system_dawg: 0, // Don't load dictionary
-      tessedit_create_txt: 1,
-      tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,?!():;-\'"%$#@&*+= '
+      // Remove problematic config options that are causing syntax errors
+      // Keep it simple but effective
     };
     
     // Recognize text from image
     const text = await tesseract.recognize(imagePath, config);
     
     // Process the text to improve quality (simulate AI post-processing)
-    const enhancedText = text
+    let enhancedText = text
       .split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .join('\n');
+      
+    // Apply some AI-like post-processing corrections
+    enhancedText = enhancedText
+      // Fix common OCR errors
+      .replace(/l\s+/g, 'I ') // Replace lonely 'l' with 'I'
+      .replace(/\b0\b/g, 'O') // Replace lonely '0' with 'O'
+      .replace(/\bl\b/g, 'I') // Replace lonely 'l' with 'I'
+      .replace(/\bI([,.]\s)/g, 'I$1') // Fix spacing after I with punctuation
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space between lowercase and uppercase
+      
+      // Ensure proper sentence capitalization
+      .replace(/([.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase())
+      
+      // Format date patterns nicely
+      .replace(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g, '$1/$2/$3')
+      
+      // Fix common sentiment words for better mood detection
+      .replace(/\bhappy\b/gi, 'happy')
+      .replace(/\bsad\b/gi, 'sad')
+      .replace(/\bangry\b/gi, 'angry')
+      .replace(/\bexcited\b/gi, 'excited')
+      .replace(/\btired\b/gi, 'tired')
+      .replace(/\bexhausted\b/gi, 'exhausted');
     
     return {
       success: true,
