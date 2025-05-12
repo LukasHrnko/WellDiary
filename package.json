@@ -88,6 +88,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^6.0.1",
     "vaul": "^1.1.0",
+    "web-ai-toolkit": "^0.3.3",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
     "zod": "^3.23.8",
