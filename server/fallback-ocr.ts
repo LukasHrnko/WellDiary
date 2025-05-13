@@ -37,8 +37,23 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
   
   try {
     // Použijeme Tesseract OCR nástroj, který je nainstalován v systému
-    const cmd = `tesseract "${imagePath}" stdout -l ${language}`;
+    // Nejprve zkontrolujeme, zda soubor existuje
+    if (!fs.existsSync(imagePath)) {
+      throw new Error(`Soubor ${imagePath} neexistuje`);
+    }
     
+    // Nastavit možnosti pro lepší rozpoznávání rukopisu
+    const tessOptions = [
+      '--oem 1',  // LSTM OCR Engine only
+      '--psm 6',  // Assume a single uniform block of text
+      '-c preserve_interword_spaces=1',
+      '-c textord_heavy_nr=1',
+      '-c tessedit_do_invert=0'
+    ].join(' ');
+    
+    const cmd = `tesseract "${imagePath}" stdout ${language !== 'ces' ? `-l ${language}` : ''} ${tessOptions}`;
+    
+    console.log(`Spouštím příkaz: ${cmd}`);
     const { stdout, stderr } = await execAsync(cmd);
     
     const executionTime = (Date.now() - startTime) / 1000;
