@@ -116,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Check for new achievements
-      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+      checkAndUpdateAchievements(req.user.id).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
@@ -435,7 +435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Check for new achievements
-      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+      checkAndUpdateAchievements(req.user.id).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
@@ -524,7 +524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Check for new achievements
-      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+      checkAndUpdateAchievements(req.user.id).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
@@ -609,7 +609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Check for new achievements
-      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+      checkAndUpdateAchievements(req.user.id).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
