@@ -297,10 +297,10 @@ def perform_handwriting_recognition(image_path, language='eng'):
                 "error": f"Image file not found: {image_path}"
             }
         
-        # Optimized for performance in replit environment
-        # We'll use a subset of preprocessing variants and orientations
-        variants = [0, 1, 2, 5, 9]  # Just the best preprocessing variants
-        orientations = [0, 270]  # Most common orientations
+        # JEŠTĚ VÍCE OPTIMALIZOVÁNO pro rychlost v prostředí Replit
+        # Použijeme jen minimální počet nejúčinnějších variant a orientací
+        variants = [1, 2]  # Pouze nejúčinnější varianty předzpracování
+        orientations = [0]  # Pouze základní orientace
         
         print(f"Processing with {len(variants)} preprocessing variants × {len(orientations)} orientations = {len(variants) * len(orientations)} combinations")
         
