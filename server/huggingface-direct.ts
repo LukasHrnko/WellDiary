@@ -48,7 +48,7 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
     
     // Endpoint pro tento model vyžaduje multipart/form-data s obrázkem
     const response = await fetch(
-      'https://api-inference.huggingface.co/models/nielsr/TrOCR-handwritten',
+      'https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten',
       {
         method: 'POST',
         headers: {
