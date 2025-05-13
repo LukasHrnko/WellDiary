@@ -134,6 +134,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
+      // Kontrola přihlášení uživatele
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
+      const userId = req.user.id;
+      
+      // Extrakt dodatečných dat z formuláře
+      const mood = req.body.mood ? parseInt(req.body.mood) : undefined;
+      const sleepHours = req.body.sleepHours ? parseFloat(req.body.sleepHours) : undefined;
+      const steps = req.body.steps ? parseInt(req.body.steps) : undefined;
+      const activities = req.body.activities ? req.body.activities.split(',').map((a: string) => a.trim()) : undefined;
+      
       // Save uploaded image to temp file
       const imagePath = trocr.saveUploadedImage(
         req.file.buffer, 
@@ -155,36 +168,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const date = safeParseDate(journalData.date);
       
       const journal = await storage.insertJournal({
-        userId: MOCK_USER_ID,
+        userId,
         content: journalData.content,
         date,
         imageUrl: null
       });
       
-      // Create mood entry if detected
-      if (journalData.mood !== undefined) {
+      // Create mood entry - preferuj hodnotu z formuláře, pokud existuje
+      const finalMood = mood !== undefined ? mood : journalData.mood;
+      if (finalMood !== undefined) {
         await storage.insertMood({
-          userId: MOCK_USER_ID,
-          value: journalData.mood,
+          userId,
+          value: finalMood,
           date
         });
       }
       
-      // Create sleep entry if detected
-      if (journalData.sleep !== undefined) {
+      // Create sleep entry - preferuj hodnotu z formuláře, pokud existuje
+      const finalSleepHours = sleepHours !== undefined ? sleepHours : journalData.sleep;
+      if (finalSleepHours !== undefined) {
         await storage.insertSleep({
-          userId: MOCK_USER_ID,
-          hours: journalData.sleep,
+          userId,
+          hours: finalSleepHours,
           date
         });
       }
       
-      // Create activity entry if activities detected
-      if (journalData.activities && journalData.activities.length > 0) {
-        const steps = Math.floor(Math.random() * 5000) + 3000;
+      // Create activity entry - preferuj hodnotu z formuláře, pokud existuje
+      const finalActivities = activities || (journalData.activities && journalData.activities.length > 0 ? journalData.activities : null);
+      if (finalActivities) {
+        // Použij kroky z formuláře, jinak generuj hodnotu
+        const finalSteps = steps !== undefined ? steps : Math.floor(Math.random() * 3000) + 5000;
         await storage.insertActivity({
-          userId: MOCK_USER_ID,
-          steps,
+          userId,
+          steps: finalSteps,
           date
         });
       }
@@ -193,12 +210,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       trocr.cleanupImage(imagePath);
       
       // Update insights asynchronously
-      updateJournalInsights(MOCK_USER_ID).catch(err => 
+      updateJournalInsights(userId).catch(err => 
         console.error("Failed to update journal insights:", err)
       );
       
       // Check for new achievements
-      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+      checkAndUpdateAchievements(userId).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
@@ -221,6 +238,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
+      // Kontrola přihlášení uživatele
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
+      const userId = req.user.id;
+      
+      // Extrakt dodatečných dat z formuláře
+      const mood = req.body.mood ? parseInt(req.body.mood) : undefined;
+      const sleepHours = req.body.sleepHours ? parseFloat(req.body.sleepHours) : undefined;
+      const steps = req.body.steps ? parseInt(req.body.steps) : undefined;
+      const activities = req.body.activities ? req.body.activities.split(',').map((a: string) => a.trim()) : undefined;
+      
       // Save uploaded image to temp file
       const imagePath = trocr.saveUploadedImage(
         req.file.buffer, 
@@ -242,36 +272,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const date = safeParseDate(journalData.date);
       
       const journal = await storage.insertJournal({
-        userId: MOCK_USER_ID,
+        userId,
         content: journalData.content,
         date,
         imageUrl: null
       });
       
-      // Create mood entry if detected
-      if (journalData.mood !== undefined) {
+      // Create mood entry - preferuj hodnotu z formuláře, pokud existuje
+      const finalMood = mood !== undefined ? mood : journalData.mood;
+      if (finalMood !== undefined) {
         await storage.insertMood({
-          userId: MOCK_USER_ID,
-          value: journalData.mood,
+          userId,
+          value: finalMood,
           date
         });
       }
       
-      // Create sleep entry if detected
-      if (journalData.sleep !== undefined) {
+      // Create sleep entry - preferuj hodnotu z formuláře, pokud existuje
+      const finalSleepHours = sleepHours !== undefined ? sleepHours : journalData.sleep;
+      if (finalSleepHours !== undefined) {
         await storage.insertSleep({
-          userId: MOCK_USER_ID,
-          hours: journalData.sleep,
+          userId,
+          hours: finalSleepHours,
           date
         });
       }
       
-      // Create activity entry if activities detected
-      if (journalData.activities && journalData.activities.length > 0) {
-        const steps = Math.floor(Math.random() * 5000) + 3000;
+      // Create activity entry - preferuj hodnotu z formuláře, pokud existuje
+      const finalActivities = activities || (journalData.activities && journalData.activities.length > 0 ? journalData.activities : null);
+      if (finalActivities) {
+        // Použij kroky z formuláře, jinak generuj hodnotu
+        const finalSteps = steps !== undefined ? steps : Math.floor(Math.random() * 3000) + 5000;
         await storage.insertActivity({
-          userId: MOCK_USER_ID,
-          steps,
+          userId,
+          steps: finalSteps,
           date
         });
       }
@@ -280,12 +314,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       trocr.cleanupImage(imagePath);
       
       // Update insights asynchronously
-      updateJournalInsights(MOCK_USER_ID).catch(err => 
+      updateJournalInsights(userId).catch(err => 
         console.error("Failed to update journal insights:", err)
       );
       
       // Check for new achievements
-      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+      checkAndUpdateAchievements(userId).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
@@ -419,7 +453,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
       
-      const data = await storage.getMonthlyActivity(MOCK_USER_ID, formattedStartDate, formattedEndDate);
+      const data = await storage.getMonthlyActivityData(
+        req.isAuthenticated() ? req.user.id : MOCK_USER_ID, 
+        formattedStartDate, 
+        formattedEndDate
+      );
       
       res.json({ monthlyData: data });
     } catch (error) {
