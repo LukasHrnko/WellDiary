@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { JournalUploader } from "@/components/journal/JournalUploader";
 
 interface JournalEntry {
   id: string;
