@@ -1034,10 +1034,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/mood", async (_req: Request, res: Response) => {
     try {
-      const data = await storage.getMoods(MOCK_USER_ID);
-      const average = data.length > 0
-        ? data.reduce((sum: number, entry: any) => sum + entry.value, 0) / data.length
-        : 0;
+      const data = await storage.getMoods(MOCK_USER_ID, '2023-01-01', '2023-12-31');
+      // Data již obsahují průměr, případně ho můžeme spočítat znovu
+      let average = data.average;
+      
+      // Případně můžeme přepočítat průměr z dat
+      if (data.moods && data.moods.length > 0) {
+        average = data.moods.reduce((sum: number, entry: any) => sum + entry.value, 0) / data.moods.length;
+      }
       
       res.json({ 
         moods: data, 
@@ -1102,9 +1106,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/sleep", async (_req: Request, res: Response) => {
     try {
-      const data = await storage.getUserSleep(MOCK_USER_ID);
-      const average = data.length > 0
-        ? data.reduce((sum, entry) => sum + entry.hours, 0) / data.length
+      const data = await storage.getSleep(MOCK_USER_ID, '2023-01-01', '2023-12-31');
+      // Data mají jinou strukturu, než se očekávalo - přizpůsobujeme výpočet
+      const average = data.sleep && data.sleep.length > 0
+        ? data.sleep.reduce((sum: number, entry: any) => sum + entry.hours, 0) / data.sleep.length
         : 0;
       
       res.json({ 
@@ -1170,9 +1175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/activity", async (_req: Request, res: Response) => {
     try {
-      const data = await storage.getUserActivity(MOCK_USER_ID);
-      const average = data.length > 0
-        ? data.reduce((sum, entry) => sum + entry.steps, 0) / data.length
+      const data = await storage.getActivity(MOCK_USER_ID, '2023-01-01', '2023-12-31');
+      // Data mají jinou strukturu, než se očekávalo - přizpůsobujeme výpočet
+      const average = data.activity && data.activity.length > 0
+        ? data.activity.reduce((sum: number, entry: any) => sum + entry.steps, 0) / data.activity.length
         : 0;
       
       // Goals
@@ -1184,12 +1190,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const weekEnd = endOfWeek(today);
       
       // Calculate steps for this week
-      const weeklySteps = data
-        .filter(entry => {
-          const entryDate = new Date(entry.date);
-          return entryDate >= weekStart && entryDate <= weekEnd;
-        })
-        .reduce((sum, entry) => sum + entry.steps, 0);
+      let weeklySteps = 0;
+      if (data.activity && data.activity.length > 0) {
+        weeklySteps = data.activity
+          .filter((entry: any) => {
+            const entryDate = new Date(entry.date);
+            return entryDate >= weekStart && entryDate <= weekEnd;
+          })
+          .reduce((sum: number, entry: any) => sum + entry.steps, 0);
+      }
       
       // Weekly goal
       const weeklyGoal = goal * 7;
