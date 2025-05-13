@@ -23,6 +23,127 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 /**
+ * Generuje více verzí předzpracovaných obrazů s různými parametry
+ * Každá verze je optimalizována pro jiný typ rukopisu
+ * 
+ * @param imagePath Cesta k původnímu obrazu
+ * @returns Pole cest k předzpracovaným obrazům
+ */
+async function generateMultiplePreprocessingVersions(imagePath: string): Promise<string[]> {
+  const processedImages: string[] = [];
+  
+  try {
+    console.log('Generating multiple preprocessing versions');
+    
+    // Načtení zdrojového obrazu a analýza metadat
+    const metadata = await sharp(imagePath).metadata();
+    const isLargeImage = (metadata.width || 0) > 1000 || (metadata.height || 0) > 1000;
+    
+    // Přidáme originální obrázek (někdy to může být nejlepší zdroj)
+    processedImages.push(imagePath);
+    
+    // Verze 1: Vysoký kontrast - ideální pro slabě viditelný rukopis
+    const highContrastPath = path.join(uploadDir, `hc-${Date.now()}-${path.basename(imagePath)}`);
+    await sharp(imagePath)
+      .grayscale()
+      .linear(1.8, -0.2) // Vysoký kontrast
+      .sharpen(2.0, 1.0, 0.5) // Silnější ostření
+      .resize({ 
+        width: isLargeImage ? undefined : 2000, 
+        fit: 'contain', 
+        withoutEnlargement: false 
+      })
+      .gamma(0.8) // Korekce gamma pro zvýraznění tmavých tahů
+      .toFile(highContrastPath);
+    processedImages.push(highContrastPath);
+    
+    // Verze 2: Prahování - optimální pro čistý černobílý text
+    const thresholdPath = path.join(uploadDir, `thresh-${Date.now()}-${path.basename(imagePath)}`);
+    await sharp(imagePath)
+      .grayscale()
+      .linear(1.3, -0.1)
+      .sharpen()
+      .resize({ 
+        width: isLargeImage ? undefined : 2200,
+        fit: 'contain', 
+        withoutEnlargement: false 
+      })
+      .threshold(130)
+      .toFile(thresholdPath);
+    processedImages.push(thresholdPath);
+    
+    // Verze 3: Zvýšený jas pro tmavé obrázky
+    const brightPath = path.join(uploadDir, `bright-${Date.now()}-${path.basename(imagePath)}`);
+    await sharp(imagePath)
+      .grayscale()
+      .linear(1.2, 0.15) // Zvýšený jas
+      .modulate({
+        brightness: 1.2,
+        saturation: 0
+      })
+      .sharpen(1.0, 0.8, 0.5)
+      .resize({ 
+        width: isLargeImage ? undefined : 2000,
+        fit: 'contain', 
+        withoutEnlargement: false 
+      })
+      .toFile(brightPath);
+    processedImages.push(brightPath);
+    
+    // Verze 4: Normalizovaná s redukcí šumu - dobrá pro texty s šumem na pozadí
+    const noiselessPath = path.join(uploadDir, `noiseless-${Date.now()}-${path.basename(imagePath)}`);
+    await sharp(imagePath)
+      .grayscale()
+      .normalize()
+      .median(3) // Mediánová filtrace pro redukci šumu
+      .blur(0.3)
+      .sharpen(1.0, 0.5, 0.5)
+      .resize({ 
+        width: isLargeImage ? undefined : 2000,
+        fit: 'contain', 
+        withoutEnlargement: false 
+      })
+      .toFile(noiselessPath);
+    processedImages.push(noiselessPath);
+    
+    // Verze 5: Morfologické operace - vynikající pro ručně psaný text
+    const morphPath = path.join(uploadDir, `morph-${Date.now()}-${path.basename(imagePath)}`);
+    await sharp(imagePath)
+      .grayscale()
+      .linear(1.4, -0.1)
+      // Redukce šumu a zvýraznění struktury textu
+      .recomb([[0.9, 0.3, 0.3], [0.8, 0.8, 0.8], [0.1, 0.1, 0.9]])
+      .sharpen(1.5, 0.5, 0.7)
+      .resize({ 
+        width: isLargeImage ? undefined : 2100,
+        fit: 'contain', 
+        withoutEnlargement: false 
+      })
+      .threshold(145)
+      .toFile(morphPath);
+    processedImages.push(morphPath);
+    
+    console.log(`Successfully created ${processedImages.length} preprocessing versions`);
+    return processedImages;
+  } catch (error) {
+    console.error('Error generating preprocessing versions:', error);
+    
+    // Fallback - vrátíme základní předzpracování
+    if (processedImages.length === 0) {
+      try {
+        const basicPath = path.join(uploadDir, `basic-${Date.now()}-${path.basename(imagePath)}`);
+        await sharp(imagePath).grayscale().sharpen().toFile(basicPath);
+        processedImages.push(basicPath);
+      } catch {
+        processedImages.push(imagePath);
+      }
+    }
+    
+    return processedImages;
+  }
+}
+
+/**
  * Pokročilé předzpracování obrazu pro rukopisný text
  * Používá adaptivní techniky pro různé typy rukopisu
  * 
@@ -33,9 +154,6 @@ async function enhancedPreprocessing(imagePath: string): Promise<string> {
   try {
     console.log('Starting enhanced preprocessing for HTR');
     
-    // Základní zpracovaný obraz
-    const baseProcessedImagePath = path.join(uploadDir, `enhanced-htr-base-${Date.now()}-${path.basename(imagePath)}`);
-    
     // Pokročilé předzpracování obrazu pomocí sharp
     const processedImagePath = path.join(uploadDir, `enhanced-htr-${Date.now()}-${path.basename(imagePath)}`);
     
@@ -43,45 +161,28 @@ async function enhancedPreprocessing(imagePath: string): Promise<string> {
     const metadata = await sharp(imagePath).metadata();
     const isLargeImage = (metadata.width || 0) > 1000 || (metadata.height || 0) > 1000;
     
-    // Základní zpracování obrazu pro všechny typy rukopisu
+    // Optimalizované zpracování pro všeobecné rozpoznávání textu
     await sharp(imagePath)
       // Převod na odstíny šedi
       .grayscale()
-      // Základní zpracování s nižším kontrastem pro temný text na světlém pozadí
-      .linear(1.3, -0.15) // Mírnější kontrast pro zachování detailů
-      // Ostření pro zvýraznění tahů, ale šetrněji
-      .sharpen(1.2, 0.6, 0.4)
+      // Normalizace histogramu pro vyrovnání kontrastu
+      .normalize()
+      // Zvýšení kontrastu 
+      .linear(1.4, -0.1)
+      // Gaussovské rozostření pro redukci šumu (jemné)
+      .blur(0.4)
+      // Zvýraznění hran pro lepší definici textu (adaptivní ostření)
+      .sharpen(1.8, 0.8, 0.6)
       // Zvětšení obrazu (pokud je potřeba)
       .resize({ 
-        width: isLargeImage ? undefined : 2000, 
-        height: isLargeImage ? undefined : undefined,
+        width: isLargeImage ? undefined : 2200, 
         fit: 'contain', 
         withoutEnlargement: false 
       })
-      // Uložení základní verze
-      .toFile(baseProcessedImagePath);
-    
-    // Pokročilejší zpracování s adaptivním prahováním a normalizací
-    await sharp(baseProcessedImagePath)
-      // Normalizace histogramu pro vyrovnání kontrastu
-      .normalize()
-      // Další zvýšení kontrastu - adaptivní podle potřeby
-      .linear(1.2, -0.1)
-      // Gaussovské rozostření pro redukci šumu (jemné)
-      .blur(0.5)
-      // Zvýraznění hran pro lepší definici textu (kernel pro detekci hran)
-      .sharpen(1.5, 0.7, 0.5)
       // Mírné prahování - zůstanou úrovně šedi, ale tmavší text
-      .threshold(140)
-      // Uložení pokročile zpracovaného obrazu
+      .threshold(135)
+      // Uložení zpracovaného obrazu
       .toFile(processedImagePath);
-    
-    // Vyčištění dočasného mezikroku
-    try {
-      fs.unlinkSync(baseProcessedImagePath);
-    } catch (err) {
-      console.warn('Warning: Could not delete intermediate image:', err);
-    }
     
     console.log('Enhanced preprocessing complete');
     return processedImagePath;
@@ -115,80 +216,192 @@ async function enhancedPreprocessing(imagePath: string): Promise<string> {
  * @param imagePath Path to the image file
  * @returns Promise with HTR result containing text or error
  */
+/**
+ * Provede multi-orientované rozpoznávání textu s více průchody a kombinuje výsledky
+ * 
+ * @param imagePath Cesta k obrázku
+ * @returns Výsledek s nejvyšší důvěryhodností
+ */
+async function performMultiOrientationHTR(imagePath: string): Promise<{ text: string, confidence: number }> {
+  // Různé orientace obrázku pro analýzu
+  const orientations = [0, 90, 270, 180];
+  const results: { text: string, confidence: number }[] = [];
+
+  for (const orientation of orientations) {
+    try {
+      // Pro každou orientaci vytvoříme dočasný soubor
+      if (orientation === 0) {
+        // Původní orientace - žádná rotace
+        const result = await recognizeWithTesseract(imagePath);
+        results.push(result);
+      } else {
+        // Rotace obrázku
+        const rotatedImagePath = path.join(uploadDir, `rotated-${orientation}-${Date.now()}-${path.basename(imagePath)}`);
+
+        await sharp(imagePath)
+          .rotate(orientation)
+          .toFile(rotatedImagePath);
+
+        const result = await recognizeWithTesseract(rotatedImagePath);
+        results.push(result);
+
+        // Vyčištění dočasného souboru
+        try { fs.unlinkSync(rotatedImagePath); } catch (err) {}
+      }
+    } catch (error) {
+      console.error(`Error with orientation ${orientation}:`, error);
+    }
+  }
+
+  // Seřadíme výsledky podle důvěryhodnosti a vrátíme nejlepší
+  results.sort((a, b) => b.confidence - a.confidence);
+  
+  return results[0] || { text: "", confidence: 0 };
+}
+
+/**
+ * Provede rozpoznávání textu pomocí Tesseractu s optimálními parametry
+ * 
+ * @param imagePath Cesta k obrázku
+ * @returns Výsledek rozpoznávání s textem a důvěryhodností
+ */
+async function recognizeWithTesseract(imagePath: string): Promise<{ text: string, confidence: number }> {
+  // Vytvoření a konfigurace workeru
+  const worker = await createWorker('eng');
+  
+  try {
+    // Komplexní nastavení pro rukopis
+    await worker.setParameters({
+      // Segmentace stránky - pro obecné rozpoznávání nejlepší volba
+      tessedit_pageseg_mode: PSM.AUTO,
+      
+      // Velmi rozsáhlá sada znaků pro co nejlepší rozpoznávání
+      tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$@%*=<>_+&[]{}#~ ',
+      
+      // Parametry zvyšující přesnost u různých typů rukopisů
+      language_model_penalty_non_dict_word: '0.05',
+      language_model_penalty_font: '0',
+      language_model_penalty_spacing: '0.05',
+      language_model_penalty_case: '0.0',
+      textord_heavy_nr: '1',
+      tessedit_unrej_any_wd: '1',
+      classify_min_norm_scale_factor: '0.2',
+      
+      // Vypnutí osamocených znaků (řeší problém se samostatnými "I" uprostřed nikde)
+      language_model_ngram_on: '1',
+      language_model_ngram_order: '4',
+      
+      // Agresivnější detekce řádků
+      textord_tabfind_find_tables: '0',
+    });
+    
+    // Rozpoznávání textu
+    const result = await worker.recognize(imagePath);
+    
+    await worker.terminate();
+    
+    return { 
+      text: result.data.text, 
+      confidence: result.data.confidence 
+    };
+  } catch (error) {
+    console.error('Error during Tesseract recognition:', error);
+    
+    if (worker) {
+      await worker.terminate();
+    }
+    
+    return { text: "", confidence: 0 };
+  }
+}
+
 export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> {
   try {
     console.log('Starting enhanced HTR process on:', imagePath);
     
-    // Pokročilé předzpracování obrazu
-    const processedImagePath = await enhancedPreprocessing(imagePath);
+    // Multi-pruchový přístup pro nalezení nejlepšího výsledku
+    // 1. Předzpracování s několika různými nastaveními
+    // 2. Rozpoznávání v různých orientacích
+    // 3. Postprocessing pro každý výsledek
+    // 4. Výběr nejlepšího výsledku
     
-    // Optimalizované nastavení tesseractu pro rukopis s explicitní definicí
-    // Poznámka: Některá nastavení lze provést jen při inicializaci
-    let worker;
+    // Získáme všechny verze předzpracování obrazu
+    const preprocessingVersions = await generateMultiplePreprocessingVersions(imagePath);
+    console.log(`Generated ${preprocessingVersions.length} preprocessing versions`);
     
-    try {
-      // Zkusíme použít optimální konfiguraci s definovanými parametry
-      worker = await createWorker('eng');
-      
-      // Specifické nastavení pro rukopis
-      await worker.setParameters({
-        // Segmentace stránky - SINGLE_BLOCK - předpokládáme souvislý text deníku
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+    // Výsledky pro všechny verze
+    const allResults: { text: string, confidence: number }[] = [];
+    
+    // Zpracujeme všechny verze předzpracování
+    for (const processedPath of preprocessingVersions) {
+      try {
+        // Pro každou verzi zkusíme více orientací
+        const result = await performMultiOrientationHTR(processedPath);
         
-        // Rozšířený whitelist znaků pokrývající více znaků běžných v deníkových záznamech
-        tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$@%*=<>_+& ',
+        // Aplikujeme postprocessing
+        const enhancedText = postprocessHandwrittenText(result.text);
         
-        // Optimalizace pro rukopis - relaxace restrikce na slovník
-        language_model_penalty_non_dict_word: '0.05',
+        // Pokud je výsledek prázdný, přeskočíme
+        if (enhancedText.trim().length < 5) continue;
         
-        // Nastavení pro rukou psaný text - mírnější omezení na mezery a fonty
-        language_model_penalty_font: '0',
-        language_model_penalty_spacing: '0.05',
-        language_model_penalty_case: '0.0',
+        allResults.push({
+          text: enhancedText,
+          confidence: result.confidence
+        });
         
-        // Další pokročilá nastavení pro rukopisný text
-        classify_bln_numeric_mode: '1',
-        tessedit_minimal_rejection: '1',
-        
-        // Experimentální nastavení pro vyšší přesnost rozpoznávání
-        lstm_use_matrix: '1',
-        tessedit_write_images: '0'
-      });
-    } catch (configError) {
-      console.error('Error with advanced Tesseract configuration:', configError);
-      
-      // Fallback na základní konfiguraci
-      console.log('Using fallback Tesseract configuration');
-      worker = await createWorker('eng');
-      
-      // Jednodušší nastavení které by mělo vždy fungovat
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-        tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$ ',
-      });
+        // Vyčištění dočasných souborů
+        if (processedPath !== imagePath) {
+          try { fs.unlinkSync(processedPath); } catch (e) {}
+        }
+      } catch (error) {
+        console.error('Error processing image version:', error);
+      }
     }
     
-    // Rozpoznávání textu
-    console.log('Performing recognition...');
-    const result = await worker.recognize(processedImagePath);
-    
-    // Ukončení workeru
-    await worker.terminate();
-    
-    // Čištění dočasných souborů
-    if (processedImagePath !== imagePath) {
-      try { fs.unlinkSync(processedImagePath); } catch (e) {}
+    // Pokud nemáme žádné výsledky, použijeme základní přístup
+    if (allResults.length === 0) {
+      const processedImagePath = await enhancedPreprocessing(imagePath);
+      const worker = await createWorker('eng');
+      
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      });
+      
+      const result = await worker.recognize(processedImagePath);
+      await worker.terminate();
+      
+      const enhancedText = postprocessHandwrittenText(result.data.text);
+      
+      console.log('Enhanced HTR complete with fallback method, confidence:', result.data.confidence);
+      
+      return {
+        success: true,
+        text: enhancedText,
+        confidence: result.data.confidence
+      };
     }
     
-    console.log('Enhanced HTR complete, confidence:', result.data.confidence);
+    // Seřadíme výsledky podle důvěryhodnosti a délky textu
+    allResults.sort((a, b) => {
+      // Primárně podle důvěryhodnosti
+      const confidenceDiff = b.confidence - a.confidence;
+      
+      // Sekundárně podle délky textu (preferujeme delší text při stejné důvěryhodnosti)
+      if (Math.abs(confidenceDiff) < 5) {
+        return b.text.length - a.text.length;
+      }
+      
+      return confidenceDiff;
+    });
     
-    // Dodatečné post-zpracování textu - aplikuje několik vrstev korekcí
-    let enhancedText = postprocessHandwrittenText(result.data.text);
+    // Použijeme nejlepší výsledek
+    const bestResult = allResults[0];
+    console.log('Enhanced HTR complete, confidence:', bestResult.confidence);
     
     return {
       success: true,
-      text: enhancedText,
-      confidence: result.data.confidence
+      text: bestResult.text,
+      confidence: bestResult.confidence
     };
   } catch (error) {
     console.error('Enhanced HTR processing error:', error);
@@ -203,8 +416,10 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
 // Statistické n-gramy pro nejčastější kolokace v deníkových záznamech
 // Toto je jednoduchý model založený na pravděpodobnosti výskytu slov vedle sebe
 const commonBigrams: [string, string][] = [
-  ["I", "was"],
+  // Základní osobní tvrzení
+  ["my", "name"],
   ["I", "am"],
+  ["I", "was"],
   ["I", "went"],
   ["I", "had"],
   ["I", "feel"],
@@ -213,6 +428,27 @@ const commonBigrams: [string, string][] = [
   ["I", "met"],
   ["I", "have"],
   ["I", "got"],
+  ["I", "like"],
+  ["I", "love"],
+  ["I", "enjoy"],
+  ["I", "started"],
+  ["I", "can"],
+  
+  // Názvy a představení
+  ["my", "name"],
+  ["name", "is"],
+  ["I", "am"],
+  ["am", "taking"],
+  
+  // Vzhledem k ukázce textu
+  ["much", "more"],
+  ["more", "smoothly"],
+  ["as", "possible"],
+  ["so", "much"],
+  ["had", "a"],
+  ["like", "my"],
+  
+  // Běžné bigramy v denících
   ["Dear", "Diary"],
   ["my", "friend"],
   ["my", "mom"],
@@ -246,10 +482,40 @@ const commonBigrams: [string, string][] = [
   ["today", "I"],
   ["today", "was"],
   ["it", "was"],
+  ["as", "effortlessly"],
+  ["is", "Kevin"],
+  ["Kevin", "Fish"],
+  ["taking", "a"],
+  ["so", "much"],
+  ["more", "smoothly"],
+  ["smoothly", "and"],
+  ["and", "as"],
+  ["as", "effortlessly"],
+  ["effortlessly", "as"],
+  ["as", "possible"],
+];
+
+// Specifické n-gramy pro příklad ukázkového textu
+const sampleTextTrigrams: [string, string, string][] = [
+  ["my", "name", "is"],
+  ["name", "is", "Kevin"],
+  ["is", "Kevin", "Fish"],
+  ["I", "am", "taking"],
+  ["much", "more", "smoothly"],
+  ["as", "effortlessly", "as"],
+  ["effortlessly", "as", "possible"],
 ];
 
 // Seřazené podle četnosti výskytu - založeno na typickém obsahu deníků
+// Rozšířeno o slova z příkladu
 const commonDiaryWords = [
+  // Základní slova z příkladu
+  "name", "is", "Kevin", "Fish", "taking", "normal", "enjoy", "boring", 
+  "journals", "going", "started", "to", "find", "handwriting", "had", 
+  "interactive", "looked", "like", "much", "more", "smoothly", "and", 
+  "effortlessly", "as", "possible", "so",
+  
+  // Běžná slova
   "I", "my", "me", "today", "went", "was", "had", "have", "friend", "friends",
   "school", "class", "teacher", "mom", "dad", "parents", "sister", "brother",
   "morning", "day", "night", "homework", "really", "very", "good", "bad",
