@@ -53,7 +53,8 @@ async function generateMultiplePreprocessingVersions(imagePath: string): Promise
         fit: 'contain', 
         withoutEnlargement: false 
       })
-      .gamma(0.8) // Korekce gamma pro zvýraznění tmavých tahů
+      // Gamma musí být mezi 1.0 a 3.0
+      .gamma(1.1) // Mírná korekce gamma
       .toFile(highContrastPath);
     processedImages.push(highContrastPath);
     
@@ -287,8 +288,7 @@ async function recognizeWithTesseract(imagePath: string): Promise<{ text: string
       tessedit_unrej_any_wd: '1',
       classify_min_norm_scale_factor: '0.2',
       
-      // Vypnutí osamocených znaků (řeší problém se samostatnými "I" uprostřed nikde)
-      language_model_ngram_on: '1',
+      // Nastavení n-gramů (volíme takové, které lze použít po inicializaci)
       language_model_ngram_order: '4',
       
       // Agresivnější detekce řádků
