@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import fetch from 'node-fetch';
 
-const HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten";
+const HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/trocr-large-handwritten";
 
 interface OCRResult {
   success: boolean;
@@ -25,7 +25,7 @@ interface OCRResult {
  * @param imagePath Path to the image file
  * @returns Promise with OCR result containing text or error
  */
-export async function performHuggingFaceOCR(imagePath: string): Promise<OCRResult> {
+export async function performTrOCR(imagePath: string): Promise<OCRResult> {
   console.log(`Provádím TrOCR s Hugging Face pro: ${imagePath}`);
   const startTime = Date.now();
   
