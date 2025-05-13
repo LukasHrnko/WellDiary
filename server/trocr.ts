@@ -97,16 +97,16 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
     
     // Return a promise that resolves when the Python process exits
     return new Promise<HTRResult>((resolve) => {
-      // Set a timeout in case Python process hangs - reduced for better UX
+      // Set a timeout in case Python process hangs - increased to 90 seconds
       const timeout = setTimeout(() => {
-        console.error('Python process timeout after 15 seconds');
+        console.error('Python process timeout after 90 seconds');
         pythonProcess.kill();
         resolve({
           success: false,
           text: '',
-          error: 'Process timeout (15 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'
+          error: 'Process timeout (90 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'
         });
-      }, 15000);
+      }, 90000);
       
       pythonProcess.on('close', (code) => {
         clearTimeout(timeout);

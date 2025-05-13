@@ -221,7 +221,7 @@ result = recognize_handwritten_text('${imagePath}', '${language}')
 print(json.dumps(result))
 `;
 
-    // Nastavit timeout - pokud proces běží déle než 25 sekund, ukončíme ho
+    // Nastavit timeout - pokud proces běží déle než 90 sekund, ukončíme ho
     let isResolved = false;
     
     // Spustit Python proces pro přímé zpracování
@@ -239,10 +239,10 @@ print(json.dumps(result))
         resolve({
           success: false,
           text: '',
-          error: 'Process timeout (25 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'
+          error: 'Process timeout (90 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'
         });
       }
-    }, 25000);
+    }, 90000);
     
     let resultData = '';
     let errorData = '';
