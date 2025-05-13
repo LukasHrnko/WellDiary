@@ -165,48 +165,69 @@ function analyzeTrends(moods: Mood[], sleep: Sleep[], activity: Activity[]): Tre
     correlations: []
   };
   
+  // Ensure inputs are arrays
+  if (!Array.isArray(moods) || !Array.isArray(sleep) || !Array.isArray(activity)) {
+    console.error("Invalid input to analyzeTrends:", { 
+      moodsIsArray: Array.isArray(moods), 
+      sleepIsArray: Array.isArray(sleep), 
+      activityIsArray: Array.isArray(activity) 
+    });
+    return result;
+  }
+  
   // Need at least a few data points for meaningful analysis
   if (moods.length < 3 || sleep.length < 3 || activity.length < 3) {
     return result;
   }
   
   // Split data into recent vs older to determine trends
-  const halfIndex = Math.floor(moods.length / 2);
+  const moodHalfIndex = Math.floor(moods.length / 2) || 1; // Ensure at least 1
+  const sleepHalfIndex = Math.floor(sleep.length / 2) || 1;
+  const activityHalfIndex = Math.floor(activity.length / 2) || 1;
   
   // Analyze mood trend
-  const recentMoods = moods.slice(-halfIndex);
-  const olderMoods = moods.slice(0, halfIndex);
-  const recentMoodAvg = recentMoods.reduce((sum, m) => sum + m.value, 0) / recentMoods.length;
-  const olderMoodAvg = olderMoods.reduce((sum, m) => sum + m.value, 0) / olderMoods.length;
+  const recentMoods = moods.slice(-moodHalfIndex);
+  const olderMoods = moods.slice(0, moodHalfIndex);
   
-  if (recentMoodAvg - olderMoodAvg > 5) {
-    result.moodTrend = "improving";
-  } else if (olderMoodAvg - recentMoodAvg > 5) {
-    result.moodTrend = "declining";
+  if (recentMoods.length > 0 && olderMoods.length > 0) {
+    const recentMoodAvg = recentMoods.reduce((sum, m) => sum + m.value, 0) / recentMoods.length;
+    const olderMoodAvg = olderMoods.reduce((sum, m) => sum + m.value, 0) / olderMoods.length;
+    
+    if (recentMoodAvg - olderMoodAvg > 5) {
+      result.moodTrend = "improving";
+    } else if (olderMoodAvg - recentMoodAvg > 5) {
+      result.moodTrend = "declining";
+    }
   }
   
   // Analyze sleep trend
-  const recentSleep = sleep.slice(-halfIndex);
-  const olderSleep = sleep.slice(0, halfIndex);
-  const recentSleepAvg = recentSleep.reduce((sum, s) => sum + s.hours, 0) / recentSleep.length;
-  const olderSleepAvg = olderSleep.reduce((sum, s) => sum + s.hours, 0) / olderSleep.length;
+  const recentSleep = sleep.slice(-sleepHalfIndex);
+  const olderSleep = sleep.slice(0, sleepHalfIndex);
   
-  if (recentSleepAvg - olderSleepAvg > 0.5) {
-    result.sleepTrend = "improving";
-  } else if (olderSleepAvg - recentSleepAvg > 0.5) {
-    result.sleepTrend = "declining";
+  if (recentSleep.length > 0 && olderSleep.length > 0) {
+    const recentSleepAvg = recentSleep.reduce((sum, s) => sum + s.hours, 0) / recentSleep.length;
+    const olderSleepAvg = olderSleep.reduce((sum, s) => sum + s.hours, 0) / olderSleep.length;
+    
+    if (recentSleepAvg - olderSleepAvg > 0.5) {
+      result.sleepTrend = "improving";
+    } else if (olderSleepAvg - recentSleepAvg > 0.5) {
+      result.sleepTrend = "declining";
+    }
   }
   
   // Analyze activity trend
-  const recentActivity = activity.slice(-halfIndex);
-  const olderActivity = activity.slice(0, halfIndex);
-  const recentActivityAvg = recentActivity.reduce((sum, a) => sum + a.steps, 0) / recentActivity.length;
-  const olderActivityAvg = olderActivity.reduce((sum, a) => sum + a.steps, 0) / olderActivity.length;
+  const recentActivity = activity.slice(-activityHalfIndex);
+  const olderActivity = activity.slice(0, activityHalfIndex);
   
-  if (recentActivityAvg - olderActivityAvg > 1000) {
-    result.activityTrend = "improving";
-  } else if (olderActivityAvg - recentActivityAvg > 1000) {
-    result.activityTrend = "declining";
+  if (recentActivity.length > 0 && olderActivity.length > 0) {
+    const recentActivityAvg = recentActivity.reduce((sum, a) => sum + a.steps, 0) / recentActivity.length;
+    const olderActivityAvg = olderActivity.reduce((sum, a) => sum + a.steps, 0) / olderActivity.length;
+    
+    if (recentActivityAvg - olderActivityAvg > 1000) {
+      result.activityTrend = "improving";
+    } else if (olderActivityAvg - recentActivityAvg > 1000) {
+      result.activityTrend = "declining";
+    }
   }
   
   // Analyze potential correlations
