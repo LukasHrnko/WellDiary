@@ -8,6 +8,7 @@ import * as paddleocr from "./paddleocr";
 import * as webaiocr from "./webai-ocr";
 import * as ai from "./ai";
 import * as htr from "./enhanced-htr";
+import * as huggingFaceOcr from "./huggingface-ocr";
 import * as handwritingRecognition from "./handwriting-recognition";
 import * as trocr from "./trocr";
 import * as lightOcr from "./light-ocr";
