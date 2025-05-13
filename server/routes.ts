@@ -1332,28 +1332,22 @@ async function updateJournalInsights(userId: number): Promise<void> {
     // Update insights in the database
     // Instead of using storage.setJournalInsights which doesn't exist, we'll do it directly
     
-    // First check if insights already exist
-    const existingInsight = await db.query.journalInsights.findFirst({
-      where: eq(journalInsights.userId, userId)
-    });
-    
-    if (existingInsight) {
-      // Update existing
-      await db.update(journalInsights)
-        .set({
-          themes: JSON.stringify(themes),
-          correlations: JSON.stringify(correlations),
-          updatedAt: new Date()
-        })
+    try {
+      // First try to delete any existing insights
+      await db.delete(journalInsights)
         .where(eq(journalInsights.userId, userId));
-    } else {
-      // Insert new
-      await db.insert(journalInsights).values({
+      
+      // Then insert new insights
+      await db.insert(journalInsights).values([{
         userId,
-        themes: JSON.stringify(themes),
-        correlations: JSON.stringify(correlations),
+        themes: themes,
+        correlations: correlations,
         updatedAt: new Date()
-      });
+      }]);
+      
+      console.log('Journal insights updated successfully');
+    } catch (dbError) {
+      console.error('Error updating journal insights in database:', dbError);
     }
   } catch (error) {
     console.error("Error updating journal insights:", error);
