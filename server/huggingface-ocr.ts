@@ -1,15 +1,17 @@
 /**
- * Hugging Face TrOCR modul
+ * Hugging Face OCR modul
  * 
- * Tento modul implementuje integraci s Hugging Face API
- * pro model TrOCR specializovaný na rozpoznávání ručního písma.
+ * Tento modul používá Hugging Face API k přístupu k TrOCR modelu
+ * (microsoft/trocr-base-handwritten) pro rozpoznávání ručně psaného textu.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import fetch from 'node-fetch';
+import FormData from 'form-data';
 
-const HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten";
+// API endpoint pro Microsoft TrOCR model
+const TROCR_API_URL = 'https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten';
 
 interface OCRResult {
   success: boolean;
@@ -20,90 +22,77 @@ interface OCRResult {
 }
 
 /**
- * Perform Hugging Face TrOCR handwritten text recognition
+ * Perform OCR using the Microsoft TrOCR model via Hugging Face API
  * 
  * @param imagePath Path to the image file
+ * @param language Language code (default: 'eng', not used in actual API call but kept for interface consistency)
  * @returns Promise with OCR result containing text or error
  */
-export async function performTrOCR(imagePath: string): Promise<OCRResult> {
-  console.log(`Provádím TrOCR s Hugging Face pro: ${imagePath}`);
+export async function performTrOCR(imagePath: string, language: string = 'eng'): Promise<OCRResult> {
+  console.log(`Provádím TrOCR přes Hugging Face API pro: ${imagePath}`);
+  console.log(`Jazyk: ${language} (ignorován pro TrOCR API)`);
+  
   const startTime = Date.now();
   
   try {
-    // Check if API key is available
+    // Kontrola API klíče
     const apiKey = process.env.HUGGINGFACE_API_KEY;
     if (!apiKey) {
-      console.error("Chybí HUGGINGFACE_API_KEY v prostředí");
-      return {
-        success: false,
-        text: "",
-        error: "Pro použití TrOCR je potřeba API klíč Hugging Face. Kontaktujte administrátora aplikace."
-      };
+      throw new Error('HUGGINGFACE_API_KEY není nastaven v prostředí');
     }
     
-    // Check if image exists
+    // Zkontrolujeme, zda soubor existuje
     if (!fs.existsSync(imagePath)) {
-      console.error(`Soubor nenalezen: ${imagePath}`);
-      return {
-        success: false,
-        text: "",
-        error: `Soubor nebyl nalezen: ${imagePath}`
-      };
+      throw new Error(`Vstupní soubor neexistuje: ${imagePath}`);
     }
     
-    // Read image
+    // Načtení obrázku
     const imageBuffer = fs.readFileSync(imagePath);
     
-    // Call Hugging Face API
-    console.log("Volám Hugging Face API...");
-    const response = await fetch(HF_API_URL, {
+    // Odeslání požadavku na Hugging Face API
+    const response = await fetch(TROCR_API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/octet-stream',
       },
-      body: JSON.stringify({
-        data: [imageBuffer.toString('base64')]
-      }),
-      timeout: 30000 // 30 seconds timeout
+      body: imageBuffer,
+      timeout: 30000 // 30 sekund timeout
     });
     
+    // Kontrola odpovědi
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Hugging Face API vrátila chybu: ${response.status} ${response.statusText}`);
-      console.error(`Error details: ${errorText}`);
-      return {
-        success: false,
-        text: "",
-        error: `Hugging Face API vrátila chybu: ${response.status} ${response.statusText}`
-      };
+      throw new Error(`Hugging Face API vrátila chybu: ${response.status} ${response.statusText} - ${errorText}`);
     }
     
+    // Zpracování odpovědi
     const result = await response.json();
-    const recognizedText = result[0]?.generated_text || "";
     
-    // Calculate processing time
-    const processingTime = (Date.now() - startTime) / 1000;
-    console.log(`TrOCR zpracování dokončeno za ${processingTime.toFixed(2)} sekund`);
+    if (!result || !result[0] || typeof result[0].generated_text !== 'string') {
+      throw new Error(`Neočekávaný formát odpovědi z API: ${JSON.stringify(result)}`);
+    }
+    
+    const recognizedText = result[0].generated_text.trim();
+    const executionTime = (Date.now() - startTime) / 1000;
+    
+    console.log(`TrOCR dokončeno za ${executionTime.toFixed(2)} sekund`);
     console.log(`Rozpoznaný text: ${recognizedText}`);
     
     return {
       success: true,
       text: recognizedText,
-      confidence: 0.9, // TrOCR API nevrací přesnou důvěryhodnost
-      execution_time: processingTime
+      confidence: 0.95, // TrOCR API neposkytuje confidence score
+      execution_time: executionTime
     };
   } catch (error) {
-    console.error(`Chyba při zpracování TrOCR: ${error}`);
-    
-    // Calculate processing time even for errors
-    const processingTime = (Date.now() - startTime) / 1000;
+    console.error(`Chyba během TrOCR zpracování: ${error}`);
     
     return {
       success: false,
-      text: "",
-      error: `Chyba při zpracování TrOCR: ${error}`,
-      execution_time: processingTime
+      text: '',
+      error: `Chyba během TrOCR zpracování: ${error}`,
+      execution_time: (Date.now() - startTime) / 1000
     };
   }
 }
