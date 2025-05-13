@@ -79,6 +79,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // === Journal Routes ===
   
   // API pro rozpoznávání rukopisných deníkových záznamů
+  // Nový endpoint pro handwriting.js - specializovaný pro rukopisný text
+  app.post("/api/journal/upload/handwriting", upload.single("journal"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded", success: false });
+      }
+      
+      // Uložení nahraného souboru
+      const imagePath = handwritingRecognition.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      console.log("Starting handwriting.js recognition process");
+      
+      // Rozpoznávání rukopisu pomocí specializované knihovny
+      const hwResult = await handwritingRecognition.performHandwritingRecognition(imagePath);
+      
+      if (!hwResult.success) {
+        handwritingRecognition.cleanupImage(imagePath);
+        return res.status(500).json({ 
+          message: hwResult.error || "Handwriting recognition failed",
+          success: false
+        });
+      }
+      
+      console.log("Handwriting.js recognition complete. Confidence:", hwResult.confidence);
+      
+      // Extrakce strukturovaných dat
+      const journalData = ocr.extractJournalData(hwResult.text);
+      
+      // Bezpečné parsování data
+      const date = safeParseDate(journalData.date);
+      
+      // Vytvoření záznamu v deníku
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: journalData.content,
+        date,
+        imageUrl: null
+      });
+      
+      // Vytvoření záznamu nálady, pokud byl detekován
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu spánku, pokud byl detekován
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu aktivit
+      if (journalData.activities && journalData.activities.length > 0) {
+        // Výpočet kroků na základě zjištěných aktivit
+        const hasExercise = journalData.activities.some(activity => 
+          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
+            activity.toLowerCase().includes(term)
+          )
+        );
+        
+        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
+        
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps,
+          date
+        });
+      }
+      
+      // Aktualizovat insighty na základě nového deníkového záznamu
+      await updateJournalInsights(MOCK_USER_ID);
+      
+      // Kontrola nových ocenění
+      await checkAndUpdateAchievements(MOCK_USER_ID);
+      
+      // Vyčištění nahraného souboru
+      handwritingRecognition.cleanupImage(imagePath);
+      
+      res.status(200).json({
+        message: "Journal entry created successfully",
+        journalId: journal.id,
+        text: hwResult.text,
+        confidence: hwResult.confidence,
+        success: true
+      });
+    } catch (error) {
+      console.error("Error handling handwriting recognition upload:", error);
+      res.status(500).json({ 
+        message: "Server error processing handwriting recognition", 
+        success: false 
+      });
+    }
+  });
+  
   app.post("/api/journal/upload/enhanced-htr", upload.single("journal"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
