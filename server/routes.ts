@@ -13,6 +13,7 @@ import * as trocr from "./trocr";
 import * as lightOcr from "./light-ocr";
 import * as krakenOcr from "./kraken-ocr";
 import * as schema from "@shared/schema";
+import { journalInsights, userAchievements } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "@db";
 import { format, startOfWeek, endOfWeek, subDays } from "date-fns";
@@ -1313,9 +1314,14 @@ async function updateJournalInsights(userId: number): Promise<void> {
   try {
     // Get last 30 days of data
     const journals = await storage.getJournalEntries(userId, 30);
-    const moods = await storage.getMoods(userId, 30);
-    const sleep = await storage.getSleep(userId, 30);
-    const activity = await storage.getActivity(userId, 30);
+    const moodData = await storage.getMoods(userId, 30);
+    const sleepData = await storage.getSleep(userId, 30);
+    const activityData = await storage.getActivity(userId, 30);
+    
+    // Ensure we have proper arrays
+    const moods = Array.isArray(moodData) ? moodData : (moodData?.moods || []);
+    const sleep = Array.isArray(sleepData) ? sleepData : [];
+    const activity = Array.isArray(activityData) ? activityData : [];
     
     // Extract themes from journal entries
     const themes = ai.extractJournalThemes(journals);
@@ -1324,7 +1330,31 @@ async function updateJournalInsights(userId: number): Promise<void> {
     const correlations = ai.findJournalCorrelations(moods, sleep, activity, journals);
     
     // Update insights in the database
-    await storage.setJournalInsights(userId, themes, correlations);
+    // Instead of using storage.setJournalInsights which doesn't exist, we'll do it directly
+    
+    // First check if insights already exist
+    const existingInsight = await db.query.journalInsights.findFirst({
+      where: eq(journalInsights.userId, userId)
+    });
+    
+    if (existingInsight) {
+      // Update existing
+      await db.update(journalInsights)
+        .set({
+          themes: JSON.stringify(themes),
+          correlations: JSON.stringify(correlations),
+          updatedAt: new Date()
+        })
+        .where(eq(journalInsights.userId, userId));
+    } else {
+      // Insert new
+      await db.insert(journalInsights).values({
+        userId,
+        themes: JSON.stringify(themes),
+        correlations: JSON.stringify(correlations),
+        updatedAt: new Date()
+      });
+    }
   } catch (error) {
     console.error("Error updating journal insights:", error);
   }
@@ -1337,9 +1367,14 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
   try {
     // Get all user data needed for achievement checking
     const journals = await storage.getJournalEntries(userId, 90);
-    const moods = await storage.getMoods(userId, 90);
-    const sleep = await storage.getSleep(userId, 90);
-    const activity = await storage.getActivity(userId, 90);
+    const moodData = await storage.getMoods(userId, 90);
+    const sleepData = await storage.getSleep(userId, 90);
+    const activityData = await storage.getActivity(userId, 90);
+    
+    // Ensure we have proper arrays
+    const moods = Array.isArray(moodData) ? moodData : (moodData?.moods || []);
+    const sleep = Array.isArray(sleepData) ? sleepData : [];
+    const activity = Array.isArray(activityData) ? activityData : [];
     
     // Check which achievements have been reached
     const achievedIds = ai.checkAchievements(moods, sleep, activity, journals);
