@@ -12,7 +12,7 @@ import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
-const execPromise = promisify(exec);
+const execAsync = promisify(exec);
 
 interface OCRResult {
   success: boolean;
@@ -30,51 +30,41 @@ interface OCRResult {
  * @returns Promise s výsledkem OCR obsahujícím text nebo chybu
  */
 export async function performTrOCR(imagePath: string, language: string = 'eng'): Promise<OCRResult> {
-  console.log(`Provádím fallback OCR pro: ${imagePath}`);
+  console.log(`Provádím Tesseract OCR pro: ${imagePath}`);
   console.log(`Jazyk: ${language}`);
   
   const startTime = Date.now();
   
   try {
-    // Simulace výsledku TrOCR s předem definovaným textem
-    // Pro demonstrační účely
-    const exampleTexts = {
-      "eng": [
-        "Dear Diary,\n\nToday I joined my new school. It was very nice and exciting. My class teacher was very nice to me. She introduced me to the entire class. I sat with Shashi, the monitor.",
-        "I had a wonderful day at the park. The weather was sunny and warm, perfect for a picnic. I saw many birds and squirrels running around.",
-        "Today was a productive day at work. I completed the project ahead of schedule and my manager was impressed.",
-        "I'm feeling much better today after a week of being sick. I was able to go for a short walk outside."
-      ],
-      "ces": [
-        "Milý deníčku,\n\nDnes jsem měl skvělý den. Ráno jsem si udělal výbornou snídani a pak jsem šel do parku, kde jsem potkal starého kamaráda.",
-        "Dnes je pondělí 20. května 2025. Počasí je slunečné a teplota je kolem 22 stupňů Celsia. Plánuji jít odpoledne na procházku.",
-        "Milý deníčku, dnes jsem se cítil trochu unavený, ale přesto jsem dokončil všechny úkoly, které jsem si naplánoval.",
-        "Dnes ráno jsem vstal v 7:00, nasnídal se a pak pracoval na svém projektu. Odpoledne jsem šel nakoupit."
-      ]
-    };
+    // Použijeme Tesseract OCR nástroj, který je nainstalován v systému
+    const cmd = `tesseract "${imagePath}" stdout -l ${language}`;
     
-    // Vyberte vhodný text podle jazyka
-    const textsForLanguage = exampleTexts[language as keyof typeof exampleTexts] || exampleTexts.eng;
+    const { stdout, stderr } = await execAsync(cmd);
     
-    // Náhodně vyberte jeden z textů pro daný jazyk
-    const randomIndex = Math.floor(Math.random() * textsForLanguage.length);
-    const text = textsForLanguage[randomIndex];
+    const executionTime = (Date.now() - startTime) / 1000;
+    console.log(`Tesseract proces dokončen s kódem 0 za ${executionTime.toFixed(2)} sekund`);
     
-    // Simulace doby zpracování
-    const processingTime = (Date.now() - startTime) / 1000;
+    if (stderr && stderr.length > 0) {
+      console.error(`Tesseract stderr: ${stderr}`);
+    }
+    
+    let text = stdout.trim();
+    console.log(`Rozpoznávání dokončeno: délka textu=${text.length}`);
     
     return {
       success: true,
       text,
-      confidence: 0.85,
-      execution_time: processingTime
+      confidence: 0.8, // Tesseract neposkytuje confidence score při použití příkazové řádky
+      execution_time: executionTime
     };
   } catch (error) {
     console.error(`Chyba během OCR zpracování: ${error}`);
+    
     return {
       success: false,
       text: '',
-      error: `Chyba během OCR zpracování: ${error}`
+      error: `Chyba během OCR zpracování: ${error}`,
+      execution_time: (Date.now() - startTime) / 1000
     };
   }
 }
