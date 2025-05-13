@@ -9,6 +9,7 @@ import * as webaiocr from "./webai-ocr";
 import * as ai from "./ai";
 import * as htr from "./enhanced-htr";
 import * as handwritingRecognition from "./handwriting-recognition";
+import * as trocr from "./trocr";
 import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "@db";

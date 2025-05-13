@@ -1,10 +1,10 @@
-modules = ["nodejs-20", "bash", "web", "postgresql-16"]
+modules = ["nodejs-20", "bash", "web", "postgresql-16", "python-3.11"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["tesseract", "libuuid", "cairo", "libjpeg", "libpng", "pango", "giflib"]
+packages = ["cairo", "freetype", "giflib", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", "libjpeg_turbo", "libpng", "libtiff", "libuuid", "libwebp", "libxcrypt", "openjpeg", "pango", "tcl", "tesseract", "tk", "which", "zlib"]
 
 [deployment]
 deploymentTarget = "autoscale"
