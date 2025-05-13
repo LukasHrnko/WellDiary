@@ -76,6 +76,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === Journal Routes ===
   
+  // API pro rozpoznávání rukopisných deníkových záznamů
+  app.post("/api/journal/upload/enhanced-htr", upload.single("journal"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Dynamický import modulu pro vylepšené HTR
+      const enhancedHtr = await import('./enhanced-htr');
+      
+      // Uložení nahraného souboru
+      const imagePath = enhancedHtr.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      console.log("Starting enhanced HTR processing for handwritten text");
+      
+      // Pokročilé rozpoznávání rukopisu s více průchody
+      const htrResult = await enhancedHtr.performEnhancedHTR(imagePath);
+      
+      if (!htrResult.success) {
+        enhancedHtr.cleanupImage(imagePath);
+        return res.status(500).json({ 
+          message: htrResult.error || "Enhanced HTR processing failed",
+          success: false
+        });
+      }
+      
+      console.log("Enhanced HTR processing complete. Confidence:", htrResult.confidence);
+      
+      // Extrakce strukturovaných dat
+      const journalData = ocr.extractJournalData(htrResult.text);
+      
+      // Bezpečné parsování data
+      const date = safeParseDate(journalData.date);
+      
+      // Vytvoření záznamu v deníku
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: journalData.content,
+        date,
+        imageUrl: null
+      });
+      
+      // Vytvoření záznamu nálady, pokud byl detekován
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu spánku, pokud byl detekován
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu aktivit
+      if (journalData.activities && journalData.activities.length > 0) {
+        // Výpočet kroků na základě zjištěných aktivit
+        const hasExercise = journalData.activities.some(activity => 
+          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
+            activity.toLowerCase().includes(term)
+          )
+        );
+        
+        const steps = hasExercise ? 
+          Math.floor(Math.random() * 5000) + 5000 : 
+          Math.floor(Math.random() * 3000) + 2000;
+        
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps,
+          date
+        });
+      }
+      
+      // Vyčištění dočasného souboru
+      enhancedHtr.cleanupImage(imagePath);
+      
+      // Aktualizace insights
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
+      
+      // Kontrola nových achievementů
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      // Úspěšná odpověď
+      res.status(200).json({
+        success: true,
+        message: "Handwritten journal processed successfully with Enhanced HTR",
+        journalId: journal.id,
+        text: htrResult.text,
+        confidence: htrResult.confidence,
+        extractedData: {
+          date: journalData.date,
+          mood: journalData.mood,
+          sleep: journalData.sleep,
+          activities: journalData.activities
+        }
+      });
+    } catch (error) {
+      console.error("Enhanced HTR processing error:", error);
+      res.status(500).json({ 
+        message: "Failed to process handwritten journal with Enhanced HTR",
+        success: false
+      });
+    }
+  });
+  
   // Get journal entries
   app.get("/api/journal/entries", async (_req: Request, res: Response) => {
     try {
