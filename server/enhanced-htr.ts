@@ -185,9 +185,6 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
     // Dodatečné post-zpracování textu - aplikuje několik vrstev korekcí
     let enhancedText = postprocessHandwrittenText(result.data.text);
     
-    // Pokročilá korekce pro běžné tvary deníkových zápisů
-    enhancedText = applyDiarySpecificCorrections(enhancedText);
-    
     return {
       success: true,
       text: enhancedText,
