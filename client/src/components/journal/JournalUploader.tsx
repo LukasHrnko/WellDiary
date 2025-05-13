@@ -12,7 +12,7 @@ interface JournalUploaderProps {
   onSuccess: (data: { journalId: number, text: string }) => void;
 }
 
-type OcrMethod = 'standard' | 'paddle' | 'webai' | 'htr' | 'enhanced-htr' | 'handwriting' | 'trocr';
+type OcrMethod = 'standard' | 'paddle' | 'webai' | 'htr' | 'enhanced-htr' | 'handwriting' | 'trocr' | 'quick';
 
 const methodLabels: Record<OcrMethod, string> = {
   'standard': 'Standardní OCR (pro tištěný text)',
@@ -21,7 +21,8 @@ const methodLabels: Record<OcrMethod, string> = {
   'htr': 'HTR Základní (ruční text - základní)',
   'enhanced-htr': 'HTR Vylepšený (multi-průchod)',
   'handwriting': 'Handwriting.js (specializovaná knihovna)',
-  'trocr': 'TrOCR (Microsoft přes Python bridge)'
+  'trocr': 'TrOCR (Microsoft přes Python bridge)',
+  'quick': 'Rychlé OCR (odlehčená verze pro pomalá zařízení)'
 };
 
 export function JournalUploader({ onSuccess }: JournalUploaderProps) {
@@ -132,6 +133,9 @@ export function JournalUploader({ onSuccess }: JournalUploaderProps) {
                   {value === 'enhanced-htr' && (
                     <span className="ml-2 text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">Doporučeno</span>
                   )}
+                  {value === 'quick' && (
+                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">Pro pomalá zařízení</span>
+                  )}
                 </Label>
               </div>
             ))}
@@ -204,7 +208,7 @@ export function JournalUploader({ onSuccess }: JournalUploaderProps) {
           <p className="flex items-start">
             <Brain className="mr-2 h-4 w-4 mt-0.5" />
             <span>
-              <strong>Tip:</strong> Pro nejlepší výsledky použijte vylepšenou HTR metodu pro ručně psaný text a standardní OCR pro tištěný text.
+              <strong>Tip:</strong> Pro nejlepší výsledky použijte vylepšenou HTR metodu pro ručně psaný text a standardní OCR pro tištěný text. Pokud dochází k časovému limitu, zkuste použít metodu "Rychlé OCR".
             </span>
           </p>
         </div>

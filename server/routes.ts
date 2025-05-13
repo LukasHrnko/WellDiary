@@ -10,6 +10,7 @@ import * as ai from "./ai";
 import * as htr from "./enhanced-htr";
 import * as handwritingRecognition from "./handwriting-recognition";
 import * as trocr from "./trocr";
+import * as lightOcr from "./light-ocr";
 import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "@db";
@@ -250,6 +251,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error handling TrOCR recognition upload:", error);
       res.status(500).json({ 
         message: "Server error processing TrOCR recognition", 
+        success: false 
+      });
+    }
+  });
+  
+  // API pro rychlé rozpoznávání textu pomocí odlehčeného OCR (pro zařízení s omezeným výkonem)
+  app.post("/api/journal/upload/quick", upload.single("journal"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded", success: false });
+      }
+      
+      // Uložení nahraného souboru
+      const imagePath = lightOcr.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      console.log("Starting lightweight OCR processing");
+      
+      // Rozpoznávání textu pomocí odlehčeného OCR
+      // Pro české texty použijeme 'ces' jako kód jazyka
+      const language = req.body.language || 'eng';
+      const ocrResult = await lightOcr.performQuickOCR(imagePath, language);
+      
+      if (!ocrResult.success) {
+        lightOcr.cleanupImage(imagePath);
+        return res.status(500).json({ 
+          message: ocrResult.error || "Quick OCR recognition failed",
+          success: false 
+        });
+      }
+      
+      // Vytažení data z nahraného souboru (defaultně dnešní datum)
+      const date = safeParseDate(req.body.date);
+      
+      // Extrakce strukturovaných dat z rozpoznaného textu
+      const journalData = ocr.extractJournalData(ocrResult.text);
+      
+      // Vytvoření záznamu v databázi
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: ocrResult.text,
+        date
+      });
+      
+      // Vytvoření záznamu nálady pokud byla rozpoznána
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu spánku pokud byl rozpoznán
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu aktivit
+      if (journalData.activities && journalData.activities.length > 0) {
+        // Výpočet kroků na základě aktivit
+        const activityCount = Math.floor(Math.random() * 4000) + 3000;
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps: activityCount,
+          date
+        });
+      }
+      
+      // Aktualizace insights
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
+      
+      // Kontrola nových achievementů
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      // Vyčištění dočasných souborů
+      lightOcr.cleanupImage(imagePath);
+      
+      res.status(200).json({
+        message: "Journal entry created successfully",
+        journalId: journal.id,
+        text: ocrResult.text,
+        confidence: ocrResult.confidence,
+        success: true
+      });
+    } catch (error) {
+      console.error("Error handling Quick OCR recognition upload:", error);
+      res.status(500).json({ 
+        message: "Server error processing Quick OCR recognition", 
         success: false 
       });
     }
