@@ -824,9 +824,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/mood", async (_req: Request, res: Response) => {
     try {
-      const data = await storage.getUserMoods(MOCK_USER_ID);
+      const data = await storage.getMoods(MOCK_USER_ID);
       const average = data.length > 0
-        ? data.reduce((sum, entry) => sum + entry.value, 0) / data.length
+        ? data.reduce((sum: number, entry: any) => sum + entry.value, 0) / data.length
         : 0;
       
       res.json({ 
@@ -1069,9 +1069,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tips", async (_req: Request, res: Response) => {
     try {
       // Get recent user data for generating personalized tips
-      const recentMoods = await storage.getUserMoods(MOCK_USER_ID, 7);
-      const recentSleep = await storage.getUserSleep(MOCK_USER_ID, 7);
-      const recentActivity = await storage.getUserActivity(MOCK_USER_ID, 7);
+      const recentMoods = await storage.getMoods(MOCK_USER_ID, 7);
+      const recentSleep = await storage.getSleep(MOCK_USER_ID, 7);
+      const recentActivity = await storage.getActivity(MOCK_USER_ID, 7);
       const recentJournals = await storage.getJournalEntries(MOCK_USER_ID, 7);
       
       // Generate personalized tips based on user data
@@ -1094,7 +1094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/achievements", async (_req: Request, res: Response) => {
     try {
-      const achievements = await storage.getUserAchievements(MOCK_USER_ID);
+      const achievements = await storage.getAchievements(MOCK_USER_ID);
       res.json({ achievements });
     } catch (error) {
       console.error("Error fetching achievements:", error);
@@ -1114,9 +1114,9 @@ async function updateJournalInsights(userId: number): Promise<void> {
   try {
     // Get last 30 days of data
     const journals = await storage.getJournalEntries(userId, 30);
-    const moods = await storage.getUserMoods(userId, 30);
-    const sleep = await storage.getUserSleep(userId, 30);
-    const activity = await storage.getUserActivity(userId, 30);
+    const moods = await storage.getMoods(userId, 30);
+    const sleep = await storage.getSleep(userId, 30);
+    const activity = await storage.getActivity(userId, 30);
     
     // Extract themes from journal entries
     const themes = ai.extractJournalThemes(journals);
@@ -1125,7 +1125,7 @@ async function updateJournalInsights(userId: number): Promise<void> {
     const correlations = ai.findJournalCorrelations(moods, sleep, activity, journals);
     
     // Update insights in the database
-    await storage.updateJournalInsights(userId, themes, correlations);
+    await storage.setJournalInsights(userId, themes, correlations);
   } catch (error) {
     console.error("Error updating journal insights:", error);
   }
@@ -1138,22 +1138,22 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
   try {
     // Get all user data needed for achievement checking
     const journals = await storage.getJournalEntries(userId, 90);
-    const moods = await storage.getUserMoods(userId, 90);
-    const sleep = await storage.getUserSleep(userId, 90);
-    const activity = await storage.getUserActivity(userId, 90);
+    const moods = await storage.getMoods(userId, 90);
+    const sleep = await storage.getSleep(userId, 90);
+    const activity = await storage.getActivity(userId, 90);
     
     // Check which achievements have been reached
     const achievedIds = ai.checkAchievements(moods, sleep, activity, journals);
     
     for (const achievementId of achievedIds) {
       // Check if user already has this achievement
-      const existing = await db.query.user_achievements.findFirst({
+      const existing = await db.query.userAchievements.findFirst({
         where: (ua) => eq(ua.userId, userId) && eq(ua.achievementId, achievementId)
       });
       
       if (!existing) {
         // Add new achievement
-        await db.insert(schema.user_achievements).values({
+        await db.insert(schema.userAchievements).values({
           userId,
           achievementId,
           unlocked: true,
@@ -1161,14 +1161,14 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
         });
       } else if (!existing.unlocked) {
         // Update existing achievement to unlocked
-        await db.update(schema.user_achievements)
+        await db.update(schema.userAchievements)
           .set({ 
             unlocked: true,
             unlockedAt: new Date().toISOString()
           })
           .where(
-            eq(schema.user_achievements.userId, userId) && 
-            eq(schema.user_achievements.achievementId, achievementId)
+            eq(schema.userAchievements.userId, userId) && 
+            eq(schema.userAchievements.achievementId, achievementId)
           );
       }
     }
