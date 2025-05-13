@@ -11,6 +11,7 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 
 // API endpoint pro Microsoft TrOCR model
+// Správná URL pro Hugging Face Inference API
 const TROCR_API_URL = 'https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten';
 
 interface OCRResult {
