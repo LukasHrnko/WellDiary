@@ -1288,9 +1288,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tips", async (_req: Request, res: Response) => {
     try {
       // Get recent user data for generating personalized tips
-      const recentMoods = await storage.getMoods(String(MOCK_USER_ID), '7', 0);
-      const recentSleep = await storage.getSleep(MOCK_USER_ID, '7', 0);
-      const recentActivity = await storage.getActivity(MOCK_USER_ID, '7', 0);
+      const today = new Date();
+      const startDate = format(subDays(today, 7), 'yyyy-MM-dd');
+      const endDate = format(today, 'yyyy-MM-dd');
+      
+      const recentMoods = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
+      const recentSleep = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
+      const recentActivity = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
       const recentJournals = await storage.getJournalEntries(MOCK_USER_ID, 7);
       
       // Generate personalized tips based on user data
@@ -1332,10 +1336,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 async function updateJournalInsights(userId: number): Promise<void> {
   try {
     // Get last 30 days of data
+    const today = new Date();
+    const startDate = format(subDays(today, 30), 'yyyy-MM-dd');
+    const endDate = format(today, 'yyyy-MM-dd');
+    
     const journals = await storage.getJournalEntries(userId, 30);
-    const moodData = await storage.getMoods(userId, 30, 0);
-    const sleepData = await storage.getSleep(userId, 30, 0);
-    const activityData = await storage.getActivity(userId, 30, 0);
+    const moodData = await storage.getMoods(userId, startDate, endDate);
+    const sleepData = await storage.getSleep(userId, startDate, endDate);
+    const activityData = await storage.getActivity(userId, startDate, endDate);
     
     // Ensure we have proper arrays
     const moods = Array.isArray(moodData) ? moodData : (moodData?.moods || []);
@@ -1379,10 +1387,14 @@ async function updateJournalInsights(userId: number): Promise<void> {
 async function checkAndUpdateAchievements(userId: number): Promise<void> {
   try {
     // Get all user data needed for achievement checking
+    const today = new Date();
+    const startDate = format(subDays(today, 90), 'yyyy-MM-dd');
+    const endDate = format(today, 'yyyy-MM-dd');
+    
     const journals = await storage.getJournalEntries(userId, 90);
-    const moodData = await storage.getMoods(userId, 90, 0);
-    const sleepData = await storage.getSleep(userId, 90, 0);
-    const activityData = await storage.getActivity(userId, 90, 0);
+    const moodData = await storage.getMoods(userId, startDate, endDate);
+    const sleepData = await storage.getSleep(userId, startDate, endDate);
+    const activityData = await storage.getActivity(userId, startDate, endDate);
     
     // Ensure we have proper arrays
     const moods = Array.isArray(moodData) ? moodData : (moodData?.moods || []);
