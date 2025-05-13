@@ -74,7 +74,7 @@ export async function performHTR(imagePath: string): Promise<HTRResult> {
     // Nastavení parametrů optimalizovaných specificky pro rukopis
     await worker.setParameters({
       tessedit_ocr_engine_mode: '2',                      // LSTM only - lepší pro rukopis
-      tessedit_pageseg_mode: '6',                         // Assume a single uniform block of text (6 = PSM.SINGLE_BLOCK)
+      tessedit_pageseg_mode: 6,                           // Assume a single uniform block of text (6 = PSM.SINGLE_BLOCK)
       tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!? ', // Povolené znaky
       load_system_dawg: '0',                              // Vypnutí slovníku - lepší pro nestandardní text
       language_model_penalty_non_dict_word: '0.5',        // Snížení penalizace za slova mimo slovník

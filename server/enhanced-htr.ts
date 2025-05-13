@@ -78,9 +78,8 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
       // LSTM OCR engine - lepší pro rukopis
       tessedit_ocr_engine_mode: '2',
       
-      // Segmentace stránky
-      // hodnota '6' odpovídá PSM.SINGLE_BLOCK, ale použitím stringové hodnoty obejdeme typovou kontrolu
-      tessedit_pageseg_mode: '6',
+      // Segmentace stránky - hodnota 6 odpovídá PSM.SINGLE_BLOCK
+      tessedit_pageseg_mode: 6,
       
       // Specifický whitelist znaků pro deníkové záznamy
       tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$ ',

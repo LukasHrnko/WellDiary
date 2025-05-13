@@ -1,11 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { format } from "date-fns";
@@ -29,10 +28,6 @@ const Journal: React.FC = () => {
   const [mood, setMood] = useState(70);
   const [sleep, setSleep] = useState(7.5);
   const [activities, setActivities] = useState("");
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
-  const [ocrEngine, setOcrEngine] = useState<string>("standard");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -76,59 +71,6 @@ const Journal: React.FC = () => {
     },
   });
   
-  // Upload journal photo mutation
-  const uploadJournalMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      // Choose endpoint based on selected OCR engine
-      let endpoint = "/api/journal/upload";
-      
-      if (ocrEngine === "paddle") {
-        endpoint = "/api/journal/upload/paddle";
-      } else if (ocrEngine === "webai") {
-        endpoint = "/api/journal/upload/webai";
-      }
-        
-      const response = await fetch(endpoint, {
-        method: "POST",
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
-      
-      return await response.json();
-    },
-    onSuccess: () => {
-      // Reset the upload form
-      setUploadedFile(null);
-      setUploadPreview(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      
-      // Invalidate queries to refetch data
-      queryClient.invalidateQueries({ queryKey: ["/api/journal/entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/mood"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sleep"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/journal/insights"] });
-      
-      toast({
-        title: "Success",
-        description: "Journal photo processed successfully",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to process journal: ${error.message}`,
-        variant: "destructive",
-      });
-    },
-  });
-  
   const handleEntrySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -148,38 +90,19 @@ const Journal: React.FC = () => {
     });
   };
   
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setUploadedFile(file);
-      
-      // Create a preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          setUploadPreview(e.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-  
-  const handleUploadSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handler pro úspěšné nahrání přes JournalUploader komponentu
+  const handleUploaderSuccess = (data: { journalId: number, text: string }) => {
+    // Aktualizace dat
+    queryClient.invalidateQueries({ queryKey: ["/api/journal/entries"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/mood"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/sleep"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/journal/insights"] });
     
-    if (!uploadedFile) {
-      toast({
-        title: "Error",
-        description: "Please select a file first",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const formData = new FormData();
-    formData.append("journal", uploadedFile);
-    
-    uploadJournalMutation.mutate(formData);
+    toast({
+      title: "Úspěch!",
+      description: "Deníkový záznam byl úspěšně nahrán a zpracován",
+    });
   };
   
   return (
@@ -359,97 +282,8 @@ const Journal: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="upload">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload Journal Photo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleUploadSubmit} className="space-y-6">
-                {uploadPreview ? (
-                  <div className="mb-4">
-                    <img 
-                      src={uploadPreview} 
-                      alt="Journal preview" 
-                      className="max-w-full h-auto mx-auto max-h-96 rounded-lg shadow-md" 
-                    />
-                    <Button 
-                      type="button"
-                      variant="outline"
-                      className="mt-2 w-full"
-                      onClick={() => {
-                        setUploadedFile(null);
-                        setUploadPreview(null);
-                        if (fileInputRef.current) {
-                          fileInputRef.current.value = "";
-                        }
-                      }}
-                    >
-                      Remove Image
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
-                    <FontAwesomeIcon icon="cloud-upload-alt" className="text-3xl text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500 mb-3">
-                      Drag and drop your journal photo or click to browse
-                    </p>
-                    <label>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={handleFileChange}
-                        ref={fileInputRef}
-                      />
-                      <span className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer">
-                        Upload Photo
-                      </span>
-                    </label>
-                  </div>
-                )}
-                
-                <div className="mt-6 space-y-4">
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-medium">Rozpoznávání textu (HTR)</h3>
-                    <RadioGroup defaultValue="standard" value={ocrEngine} onValueChange={setOcrEngine}>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="standard" id="r1" />
-                        <Label htmlFor="r1">Základní rozpoznávání</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="paddle" id="r2" />
-                        <Label htmlFor="r2">Vylepšené pro rukopis</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="webai" id="r3" />
-                        <Label htmlFor="r3">Pokročilé AI rozpoznávání rukopisu</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                  
-                  <p className="text-xs text-gray-400">
-                    Naše technologie HTR (Handwritten Text Recognition) automaticky rozpozná ručně psaný text z vašeho deníku.
-                    Pro nejlepší výsledky zajistěte čitelný rukopis a dobré osvětlení fotografie.
-                  </p>
-                </div>
-                
-                {uploadedFile && (
-                  <Button 
-                    type="submit" 
-                    className="w-full"
-                    disabled={uploadJournalMutation.isPending}
-                  >
-                    {uploadJournalMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : "Process Journal"}
-                  </Button>
-                )}
-              </form>
-            </CardContent>
-          </Card>
+          {/* Používáme novou komponentu pro pokročilé rozpoznávání rukopisu */}
+          <JournalUploader onSuccess={handleUploaderSuccess} />
         </TabsContent>
       </Tabs>
     </div>
