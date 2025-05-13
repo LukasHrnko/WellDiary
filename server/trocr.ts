@@ -37,8 +37,8 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
   const startTime = Date.now(); // Měření celkové doby zpracování
 
   try {
-    // Specify the simplified Python script path
-    const pythonScriptPath = path.join(process.cwd(), 'server', 'simple_trocr.py');
+    // Specify the fallback Python script path that doesn't require external dependencies
+    const pythonScriptPath = path.join(process.cwd(), 'server', 'fallback_trocr.py');
     
     // Check if Python script exists
     if (!fs.existsSync(pythonScriptPath)) {
