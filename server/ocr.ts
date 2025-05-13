@@ -266,9 +266,11 @@ export function extractJournalData(text: string): JournalExtraction {
   
   // Mapování anglických měsíců na čísla pro parsování
   const monthNameToNumber: {[key: string]: number} = {
+    // Plné anglické názvy měsíců
     'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
     'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
-    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    // Zkratky anglických měsíců  
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'jun': 6,
     'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
     // České názvy měsíců
     'leden': 1, 'únor': 2, 'březen': 3, 'duben': 4, 'květen': 5, 'červen': 6,
