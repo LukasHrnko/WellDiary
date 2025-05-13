@@ -159,7 +159,7 @@ export function cleanupImage(filePath: string): void {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
-  } catch (error) {
-    console.error(`Error cleaning up image file: ${error.message}`);
+  } catch (error: any) {
+    console.error(`Error cleaning up image file: ${error.message || 'Unknown error'}`);
   }
 }
