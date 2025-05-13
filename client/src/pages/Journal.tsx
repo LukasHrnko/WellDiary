@@ -409,26 +409,26 @@ const Journal: React.FC = () => {
                 
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
-                    <h3 className="text-sm font-medium">OCR Engine</h3>
+                    <h3 className="text-sm font-medium">Rozpoznávání textu (HTR)</h3>
                     <RadioGroup defaultValue="standard" value={ocrEngine} onValueChange={setOcrEngine}>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="standard" id="r1" />
-                        <Label htmlFor="r1">Standard OCR</Label>
+                        <Label htmlFor="r1">Základní rozpoznávání</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="paddle" id="r2" />
-                        <Label htmlFor="r2">PaddleJS OCR (Better for handwriting)</Label>
+                        <Label htmlFor="r2">Vylepšené pro rukopis</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="webai" id="r3" />
-                        <Label htmlFor="r3">Web AI Toolkit OCR (Advanced AI model)</Label>
+                        <Label htmlFor="r3">Pokročilé AI rozpoznávání rukopisu</Label>
                       </div>
                     </RadioGroup>
                   </div>
                   
                   <p className="text-xs text-gray-400">
-                    Our OCR technology will automatically extract text from your journal.
-                    For best results, ensure your handwriting is clear and the image is well-lit.
+                    Naše technologie HTR (Handwritten Text Recognition) automaticky rozpozná ručně psaný text z vašeho deníku.
+                    Pro nejlepší výsledky zajistěte čitelný rukopis a dobré osvětlení fotografie.
                   </p>
                 </div>
                 
