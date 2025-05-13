@@ -71,14 +71,14 @@ async function startKrakenServer(): Promise<boolean> {
 let serverStarted = false;
 
 /**
- * Perform handwriting recognition using Kraken OCR API
+ * Perform handwriting recognition using our custom Handwritten Text Recognition API
  * 
  * @param imagePath Path to the image file
  * @param language Language code (default: 'eng')
  * @returns Promise with OCR result containing text or error
  */
 export async function performKrakenOCR(imagePath: string, language: string = 'eng'): Promise<OCRResult> {
-  console.log('Starting Kraken OCR processing');
+  console.log('Starting Handwritten Text Recognition processing');
   console.log(`Processing image: ${imagePath}`);
   console.log(`Language: ${language}`);
 
@@ -91,7 +91,7 @@ export async function performKrakenOCR(imagePath: string, language: string = 'en
         return {
           success: false,
           text: '',
-          error: 'Failed to start Kraken OCR API server'
+          error: 'Failed to start Handwritten Text Recognition API server'
         };
       }
     }
@@ -111,15 +111,17 @@ export async function performKrakenOCR(imagePath: string, language: string = 'en
     form.append('image', fs.createReadStream(imagePath));
     form.append('language', language);
     
-    // Nastavit timeout pro požadavek
+    // Nastavit timeout pro požadavek - delší pro hloubkovou analýzu
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 20000); // 20 sekund timeout
     
     try {
       // Poslat požadavek na API server
       const response = await fetch('http://localhost:5001/ocr', {
         method: 'POST',
+        // @ts-ignore - ignorovat typovou nekompatibilitu AbortSignal
         body: form,
+        // @ts-ignore - ignorovat typovou nekompatibilitu AbortSignal
         signal: controller.signal
       });
       
@@ -128,42 +130,42 @@ export async function performKrakenOCR(imagePath: string, language: string = 'en
       // Zpracovat odpověď
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Kraken OCR API error: ${errorText}`);
+        console.error(`Handwritten Text Recognition API error: ${errorText}`);
         return {
           success: false,
           text: '',
-          error: `Kraken OCR API error: ${errorText}`
+          error: `Handwritten Text Recognition API error: ${errorText}`
         };
       }
       
       const result = await response.json() as OCRResult;
-      console.log(`Kraken OCR processing complete. Text length: ${result.text?.length || 0}`);
+      console.log(`Handwritten Text Recognition processing complete. Text length: ${result.text?.length || 0}, Confidence: ${result.confidence || 0}`);
       return result;
     } catch (error: any) {
       clearTimeout(timeout);
       
       if (error.name === 'AbortError') {
-        console.error('Kraken OCR request timed out');
+        console.error('Handwritten Text Recognition request timed out');
         return {
           success: false,
           text: '',
-          error: 'Process timeout (15 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'
+          error: 'Process timeout (20 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'
         };
       }
       
-      console.error(`Error calling Kraken OCR API: ${error}`);
+      console.error(`Error calling Handwritten Text Recognition API: ${error}`);
       return {
         success: false,
         text: '',
-        error: `Error calling Kraken OCR API: ${error.message}`
+        error: `Error calling Handwritten Text Recognition API: ${error.message}`
       };
     }
   } catch (error: any) {
-    console.error(`Error during Kraken OCR processing: ${error}`);
+    console.error(`Error during Handwritten Text Recognition processing: ${error}`);
     return {
       success: false,
       text: '',
-      error: `Error during Kraken OCR processing: ${error.message}`
+      error: `Error during Handwritten Text Recognition processing: ${error.message}`
     };
   }
 }
