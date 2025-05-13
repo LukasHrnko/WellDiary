@@ -1300,9 +1300,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate personalized tips based on user data
       const tips = ai.generatePersonalizedTips(
         MOCK_USER_ID, 
-        recentMoods, 
-        recentSleep, 
-        recentActivity, 
+        recentMoods.moods || [], 
+        recentSleep.sleep || [], 
+        recentActivity.activity || [], 
         recentJournals
       );
       
@@ -1345,10 +1345,10 @@ async function updateJournalInsights(userId: number): Promise<void> {
     const sleepData = await storage.getSleep(userId, startDate, endDate);
     const activityData = await storage.getActivity(userId, startDate, endDate);
     
-    // Ensure we have proper arrays
-    const moods = Array.isArray(moodData) ? moodData : (moodData?.moods || []);
-    const sleep = Array.isArray(sleepData) ? sleepData : [];
-    const activity = Array.isArray(activityData) ? activityData : [];
+    // Extract data arrays
+    const moods = moodData?.moods || [];
+    const sleep = sleepData?.sleep || [];
+    const activity = activityData?.activity || [];
     
     // Extract themes from journal entries
     const themes = ai.extractJournalThemes(journals);
@@ -1396,10 +1396,10 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
     const sleepData = await storage.getSleep(userId, startDate, endDate);
     const activityData = await storage.getActivity(userId, startDate, endDate);
     
-    // Ensure we have proper arrays
-    const moods = Array.isArray(moodData) ? moodData : (moodData?.moods || []);
-    const sleep = Array.isArray(sleepData) ? sleepData : [];
-    const activity = Array.isArray(activityData) ? activityData : [];
+    // Extract data arrays
+    const moods = moodData?.moods || [];
+    const sleep = sleepData?.sleep || [];
+    const activity = activityData?.activity || [];
     
     // Check which achievements have been reached
     const achievedIds = ai.checkAchievements(moods, sleep, activity, journals);
