@@ -4,7 +4,7 @@ import multer from "multer";
 import path from "path";
 import * as storage from "./storage";
 import * as ai from "./ai";
-import * as trocr from "./fallback-ocr";
+import * as trocr from "./huggingface-api";
 import * as extractUtils from "./extract-utils";
 import * as schema from "@shared/schema";
 import { journalInsights, userAchievements } from "@shared/schema";
