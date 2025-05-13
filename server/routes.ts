@@ -400,6 +400,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Create activity entries if extracted
+      if (journalData.activities && journalData.activities.length > 0) {
+        const activityCount = journalData.activities.length * 1000; // Simple calculation based on number of activities
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps: activityCount,
+          date
+        });
+      }
+      
+      // Clean up the temporary image
+      webaiocr.cleanupImage(imagePath);
+      
+      // Update insights asynchronously
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
+      
+      // Check for new achievements
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      res.status(200).json({ 
+        success: true, 
+        message: "Journal processed successfully",
+        journalId: journal.id,
+        text: ocrResult.text
+      });
+    } catch (error) {
+      console.error("Error processing journal with Web AI Toolkit OCR:", error);
+      res.status(500).json({ message: "Failed to process journal with Web AI Toolkit OCR" });
+    }
+  });
+      
+  // Upload and process journal image with HTR (Handwritten Text Recognition)
+  app.post("/api/journal/upload/htr", upload.single("journal"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Import HTR module dynamically to avoid loading TensorFlow unnecessarily
+      const htr = await import('./htr');
+      
+      // Save uploaded image to temp file
+      const imagePath = htr.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      console.log("Starting specialized HTR processing for handwritten text");
+      
+      // Perform HTR using TensorFlow + Tesseract
+      const htrResult = await htr.performHTR(imagePath);
+      
+      if (!htrResult.success) {
+        htr.cleanupImage(imagePath);
+        return res.status(500).json({ message: htrResult.error || "HTR processing failed" });
+      }
+      
+      console.log("HTR processing complete. Confidence:", htrResult.confidence);
+      
+      // Extract structured data from HTR text using the same extraction logic
+      const journalData = ocr.extractJournalData(htrResult.text);
+      
+      // Save to database using safe date parsing
+      const date = safeParseDate(journalData.date);
+      
+      // Create journal entry
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: journalData.content,
+        date,
+        imageUrl: null // We don't store the actual image, just the extracted content
+      });
+      
+      // Create mood entry if extracted
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Create sleep entry if extracted
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
       // Save activities if extracted
       if (journalData.activities.length > 0) {
         // Calculate steps estimate based on activities
