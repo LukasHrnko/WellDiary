@@ -443,7 +443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/activity/monthly", async (_req: Request, res: Response) => {
+  app.get("/api/activity/monthly", async (req: Request, res: Response) => {
     try {
       // Get monthly activity data
       const today = new Date();
@@ -453,8 +453,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
       
+      // Use user ID if authenticated
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
       const data = await storage.getMonthlyActivityData(
-        req.isAuthenticated() ? req.user.id : MOCK_USER_ID, 
+        userId, 
         formattedStartDate, 
         formattedEndDate
       );
@@ -468,14 +471,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === Mood Routes ===
   
-  app.get("/api/mood", async (_req: Request, res: Response) => {
+  app.get("/api/mood", async (req: Request, res: Response) => {
     try {
       // Get all mood data
       const today = new Date();
       const startDate = format(subDays(today, 30), 'yyyy-MM-dd'); // last 30 days
       const endDate = format(today, 'yyyy-MM-dd');
       
-      const data = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
+      // Use user ID if authenticated, otherwise fall back to MOCK_USER_ID
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
+      const data = await storage.getMoods(userId, startDate, endDate);
       
       // Add formatted date string
       const moodsWithDate = data.moods.map(mood => ({
@@ -521,7 +527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/mood/monthly", async (_req: Request, res: Response) => {
+  app.get("/api/mood/monthly", async (req: Request, res: Response) => {
     try {
       // Get monthly mood data
       const today = new Date();
@@ -531,7 +537,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
       
-      const data = await storage.getMonthlyMoods(MOCK_USER_ID, formattedStartDate, formattedEndDate);
+      // Use user ID if authenticated
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
+      const data = await storage.getMonthlyMoodData(
+        userId, 
+        formattedStartDate, 
+        formattedEndDate
+      );
       
       res.json({ monthlyData: data });
     } catch (error) {
@@ -596,7 +609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/sleep/monthly", async (_req: Request, res: Response) => {
+  app.get("/api/sleep/monthly", async (req: Request, res: Response) => {
     try {
       // Get monthly sleep data
       const today = new Date();
@@ -606,7 +619,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
       
-      const data = await storage.getMonthlySleep(MOCK_USER_ID, formattedStartDate, formattedEndDate);
+      // Use user ID if authenticated
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
+      const data = await storage.getMonthlySleepData(userId, formattedStartDate, formattedEndDate);
       
       res.json({ monthlyData: data });
     } catch (error) {
