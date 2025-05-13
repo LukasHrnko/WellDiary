@@ -177,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!trResult.success) {
         trocr.cleanupImage(imagePath);
         return res.status(500).json({ 
-          message: trResult.error || "TrOCR recognition failed",
+          message: trResult.error || "TrOCR rozpoznávání selhalo. Zkuste použít metodu 'Rychlé OCR'.",
           success: false
         });
       }

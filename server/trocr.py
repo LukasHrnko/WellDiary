@@ -194,11 +194,10 @@ def recognize_text(image, orientation=0, lang='eng'):
             print(f"Warning: Training data for {lang} not found, falling back to eng")
             lang = 'eng'
         
-        # PERFORMANCE OPTIMIZATION: Use only the most promising configurations
-        # Define different combinations of PSM and OEM to try - reduced set for speed
+        # DALŠÍ OPTIMALIZACE: Použijeme pouze jednu konfiguraci, která funguje nejlépe
+        # pro většinu rukopisných textů - ušetříme čas a stále zachováme kvalitu
         configs = [
             {'psm': 6, 'oem': 3, 'params': ''},  # Default neural net LSTM model
-            {'psm': 3, 'oem': 3, 'params': ''},  # LSTM model, full page
         ]
         
         best_text = ""
