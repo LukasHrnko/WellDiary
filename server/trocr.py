@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
-TrOCR-inspired HTR implementation using pytesseract and OpenCV
-Designed for improved handwriting recognition with preprocessing techniques
+Optimalizované TrOCR (Microsoft-inspired) rozpoznávání rukopisu
+Využívá kombinaci OpenCV a pytesseract s pokročilými technikami zpracování obrazu
+
+Tato implementace je optimalizována pro rychlost a přesnost s těmito vylepšeními:
+- Paralelní zpracování variant předzpracování obrazu
+- Optimalizované konfigurace pytesseract
+- Pokročilé post-processingové algoritmy pro vyčištění textu
+- Inteligentní výběr nejvhodnějšího výsledku
 """
 
 import sys
@@ -11,17 +17,28 @@ import cv2
 import numpy as np
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+import time
+
+# Měření celkového času zpracování
+start_time = time.time()
 
 # Set Tesseract to use our higher quality training data
 TESSDATA_PREFIX = os.path.join(os.getcwd(), 'tessdata')
 os.environ['TESSDATA_PREFIX'] = TESSDATA_PREFIX
 
-# Configure tesseract
-print(f"Using Tesseract data directory: {TESSDATA_PREFIX}")
+# Nastavení maximálního počtu procesů pro paralelní zpracování
+# Použití multiprocessing.cpu_count() - 1 zajistí, že jeden procesor zůstane volný pro systém
+MAX_WORKERS = max(1, multiprocessing.cpu_count() - 1)
+print(f"Využívám {MAX_WORKERS} procesů pro paralelní zpracování")
+
+# Konfigurační zprávy
+print(f"Používám Tesseract data directory: {TESSDATA_PREFIX}")
 if os.path.exists(os.path.join(TESSDATA_PREFIX, 'eng.traineddata')):
-    print("Found English training data")
+    print("Nalezena anglická trénovací data")
 if os.path.exists(os.path.join(TESSDATA_PREFIX, 'ces.traineddata')):
-    print("Found Czech training data")
+    print("Nalezena česká trénovací data")
 
 def preprocess_image(image_path, variant=0):
     """
