@@ -37,16 +37,16 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
   const startTime = Date.now(); // Měření celkové doby zpracování
 
   try {
-    // Specify the optimized Python script path
-    const pythonScriptPath = path.join(process.cwd(), 'server', 'optimized_trocr.py');
+    // Specify the simplified Python script path
+    const pythonScriptPath = path.join(process.cwd(), 'server', 'simple_trocr.py');
     
     // Check if Python script exists
     if (!fs.existsSync(pythonScriptPath)) {
-      console.error(`Optimalizovaný Python skript nebyl nalezen: ${pythonScriptPath}`);
+      console.error(`Python skript nebyl nalezen: ${pythonScriptPath}`);
       return {
         success: false,
         text: '',
-        error: `Optimalizovaný Python skript nebyl nalezen: ${pythonScriptPath}`
+        error: `Python skript nebyl nalezen: ${pythonScriptPath}`
       };
     }
     
@@ -60,7 +60,7 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
       };
     }
     
-    console.log(`Používám optimalizovaný Python skript: ${pythonScriptPath}`);
+    console.log(`Používám Python skript: ${pythonScriptPath}`);
     
     // Make Python script executable
     await fs.promises.chmod(pythonScriptPath, 0o755);
@@ -76,7 +76,8 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
     }
     
     // Spawn Python process with improved error handling and optimized timeouts
-    const pythonProcess = spawn('python3', [
+    const pythonPath = '/home/runner/workspace/.pythonlibs/bin/python3';
+    const pythonProcess = spawn(pythonPath, [
       pythonScriptPath,
       imagePath,
       language
