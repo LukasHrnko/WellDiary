@@ -47,7 +47,12 @@ function safeParseDate(dateStr: string | undefined): string {
   }
 }
 
+// Import auth setup
+import { setupAuth } from "./auth";
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup authentication
+  setupAuth(app);
   // === Health Check ===
   app.get("/api/health", (_req: Request, res: Response) => {
     res.status(200).json({ status: "healthy" });
