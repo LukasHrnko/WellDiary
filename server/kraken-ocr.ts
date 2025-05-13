@@ -313,38 +313,72 @@ print(json.dumps(result))
  * @returns Promise with OCR result containing text or error
  */
 export async function performKrakenOCR(imagePath: string, language: string = 'eng'): Promise<OCRResult> {
+  console.log('Starting Kraken OCR processing');
   console.log('Starting Handwritten Text Recognition processing');
   console.log(`Processing image: ${imagePath}`);
   console.log(`Language: ${language}`);
-
-  try {
-    // Zkontrolovat, zda vstupní obrázek existuje
-    if (!fs.existsSync(imagePath)) {
-      console.error(`Input image not found at: ${imagePath}`);
-      return {
+  
+  // Omezení času OCR zpracování
+  const processingTimeout = 60000; // 60 sekund (sníženo z 90 sekund)
+  let timeoutId: NodeJS.Timeout | null = null;
+  
+  // Vytvoříme promise s timeoutem
+  const timeoutPromise = new Promise<OCRResult>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error('Process timeout (60 seconds) - OCR processing is taking too long. Zkuste metodu "Rychlé OCR".'));
+    }, processingTimeout);
+  });
+  
+  // Vytvoříme promise s vlastním OCR
+  const processingPromise = new Promise<OCRResult>(async (resolve) => {
+    try {
+      // Zkontrolovat, zda vstupní obrázek existuje
+      if (!fs.existsSync(imagePath)) {
+        console.error(`Input image not found at: ${imagePath}`);
+        resolve({
+          success: false,
+          text: '',
+          error: `Input image not found at: ${imagePath}`
+        });
+        return;
+      }
+      
+      // Spustit Python skript pro OCR přímo
+      const result = await runPythonOCR(imagePath, language);
+      
+      if (result.success) {
+        console.log(`Handwritten Text Recognition processing complete. Text length: ${result.text?.length || 0}, Confidence: ${result.confidence || 0}`);
+      } else {
+        console.error(`Handwritten Text Recognition failed: ${result.error}`);
+      }
+      
+      resolve(result);
+    } catch (error: any) {
+      console.error(`Error during Handwritten Text Recognition processing: ${error}`);
+      resolve({
         success: false,
         text: '',
-        error: `Input image not found at: ${imagePath}`
-      };
+        error: `Error during Handwritten Text Recognition processing: ${error.message}`
+      });
     }
-    
-    // Spustit Python skript pro OCR přímo
-    const result = await runPythonOCR(imagePath, language);
-    
-    if (result.success) {
-      console.log(`Handwritten Text Recognition processing complete. Text length: ${result.text?.length || 0}, Confidence: ${result.confidence || 0}`);
-    } else {
-      console.error(`Handwritten Text Recognition failed: ${result.error}`);
-    }
-    
+  });
+  
+  try {
+    // Spustíme obě promise paralelně a vrátíme tu, která se dokončí první
+    const result = await Promise.race([processingPromise, timeoutPromise]);
+    if (timeoutId) clearTimeout(timeoutId);
     return result;
   } catch (error: any) {
-    console.error(`Error during Handwritten Text Recognition processing: ${error}`);
+    if (timeoutId) clearTimeout(timeoutId);
+    console.error('OCR Process timeout - killing process');
     return {
       success: false,
       text: '',
-      error: `Error during Handwritten Text Recognition processing: ${error.message}`
+      error: error.message
     };
+  } finally {
+    // Uklidíme po sobě bez ohledu na výsledek
+    cleanupImage(imagePath);
   }
 }
 
