@@ -24,6 +24,7 @@ if (!fs.existsSync(uploadDir)) {
 
 /**
  * Pokročilé předzpracování obrazu pro rukopisný text
+ * Používá adaptivní techniky pro různé typy rukopisu
  * 
  * @param imagePath Cesta k obrázku
  * @returns Cesta k předzpracovanému obrázku
@@ -32,28 +33,79 @@ async function enhancedPreprocessing(imagePath: string): Promise<string> {
   try {
     console.log('Starting enhanced preprocessing for HTR');
     
+    // Základní zpracovaný obraz
+    const baseProcessedImagePath = path.join(uploadDir, `enhanced-htr-base-${Date.now()}-${path.basename(imagePath)}`);
+    
     // Pokročilé předzpracování obrazu pomocí sharp
     const processedImagePath = path.join(uploadDir, `enhanced-htr-${Date.now()}-${path.basename(imagePath)}`);
     
+    // Načtení zdrojového obrazu
+    const metadata = await sharp(imagePath).metadata();
+    const isLargeImage = (metadata.width || 0) > 1000 || (metadata.height || 0) > 1000;
+    
+    // Základní zpracování obrazu pro všechny typy rukopisu
     await sharp(imagePath)
       // Převod na odstíny šedi
       .grayscale()
-      // Zvýšení kontrastu
-      .linear(1.5, -0.2)
-      // Ostření pro zvýraznění tahů
+      // Základní zpracování s nižším kontrastem pro temný text na světlém pozadí
+      .linear(1.3, -0.15) // Mírnější kontrast pro zachování detailů
+      // Ostření pro zvýraznění tahů, ale šetrněji
+      .sharpen(1.2, 0.6, 0.4)
+      // Zvětšení obrazu (pokud je potřeba)
+      .resize({ 
+        width: isLargeImage ? undefined : 2000, 
+        height: isLargeImage ? undefined : undefined,
+        fit: 'contain', 
+        withoutEnlargement: false 
+      })
+      // Uložení základní verze
+      .toFile(baseProcessedImagePath);
+    
+    // Pokročilejší zpracování s adaptivním prahováním a normalizací
+    await sharp(baseProcessedImagePath)
+      // Normalizace histogramu pro vyrovnání kontrastu
+      .normalize()
+      // Další zvýšení kontrastu - adaptivní podle potřeby
+      .linear(1.2, -0.1)
+      // Gaussovské rozostření pro redukci šumu (jemné)
+      .blur(0.5)
+      // Zvýraznění hran pro lepší definici textu (kernel pro detekci hran)
       .sharpen(1.5, 0.7, 0.5)
-      // Binární prahování pro separaci textu od pozadí
-      .threshold(135)
-      // Zvětšení obrazu pro lepší rozpoznávání detailů
-      .resize({ width: 2000, fit: 'contain', withoutEnlargement: false })
-      // Uložení do formátu PNG pro bezztrátovou kompresi
+      // Mírné prahování - zůstanou úrovně šedi, ale tmavší text
+      .threshold(140)
+      // Uložení pokročile zpracovaného obrazu
       .toFile(processedImagePath);
+    
+    // Vyčištění dočasného mezikroku
+    try {
+      fs.unlinkSync(baseProcessedImagePath);
+    } catch (err) {
+      console.warn('Warning: Could not delete intermediate image:', err);
+    }
     
     console.log('Enhanced preprocessing complete');
     return processedImagePath;
   } catch (error) {
     console.error('Error during enhanced preprocessing:', error);
-    return imagePath; // Při chybě vrátíme původní obraz
+    
+    // Záložní mechanismus při selhání pokročilého zpracování
+    try {
+      // Jednodušší alternativní zpracování
+      const fallbackImagePath = path.join(uploadDir, `enhanced-htr-fallback-${Date.now()}-${path.basename(imagePath)}`);
+      
+      await sharp(imagePath)
+        .grayscale()
+        .linear(1.4, -0.2) // Zvýšený kontrast
+        .sharpen() // Výchozí ostření
+        .resize(2000) // Jednoduchá změna velikosti
+        .toFile(fallbackImagePath);
+        
+      console.log('Using fallback image preprocessing');
+      return fallbackImagePath;
+    } catch (fallbackError) {
+      console.error('Fallback processing failed:', fallbackError);
+      return imagePath; // Při selhání všech metod vrátíme původní obraz
+    }
   }
 }
 
@@ -70,26 +122,51 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
     // Pokročilé předzpracování obrazu
     const processedImagePath = await enhancedPreprocessing(imagePath);
     
-    // Nastavení tesseractu s optimálními parametry pro rukopis
-    const worker = await createWorker('eng');
+    // Optimalizované nastavení tesseractu pro rukopis s explicitní definicí
+    // Poznámka: Některá nastavení lze provést jen při inicializaci
+    let worker;
     
-    // Specifické nastavení pro rukopis
-    await worker.setParameters({
-      // LSTM OCR engine - lepší pro rukopis
-      tessedit_ocr_engine_mode: '2',
+    try {
+      // Zkusíme použít optimální konfiguraci s definovanými parametry
+      worker = await createWorker('eng');
       
-      // Segmentace stránky - hodnota PSM.SINGLE_BLOCK
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      // Specifické nastavení pro rukopis
+      await worker.setParameters({
+        // Segmentace stránky - SINGLE_BLOCK - předpokládáme souvislý text deníku
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+        
+        // Rozšířený whitelist znaků pokrývající více znaků běžných v deníkových záznamech
+        tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$@%*=<>_+& ',
+        
+        // Optimalizace pro rukopis - relaxace restrikce na slovník
+        language_model_penalty_non_dict_word: '0.05',
+        
+        // Nastavení pro rukou psaný text - mírnější omezení na mezery a fonty
+        language_model_penalty_font: '0',
+        language_model_penalty_spacing: '0.05',
+        language_model_penalty_case: '0.0',
+        
+        // Další pokročilá nastavení pro rukopisný text
+        classify_bln_numeric_mode: '1',
+        tessedit_minimal_rejection: '1',
+        
+        // Experimentální nastavení pro vyšší přesnost rozpoznávání
+        lstm_use_matrix: '1',
+        tessedit_write_images: '0'
+      });
+    } catch (configError) {
+      console.error('Error with advanced Tesseract configuration:', configError);
       
-      // Specifický whitelist znaků pro deníkové záznamy
-      tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$ ',
+      // Fallback na základní konfiguraci
+      console.log('Using fallback Tesseract configuration');
+      worker = await createWorker('eng');
       
-      // Vypnutí slovníku pro lepší rozpoznání nestandardního textu
-      load_system_dawg: '0',
-      
-      // Snížení penalizace za slova mimo slovník
-      language_model_penalty_non_dict_word: '0.15',
-    });
+      // Jednodušší nastavení které by mělo vždy fungovat
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+        tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$ ',
+      });
+    }
     
     // Rozpoznávání textu
     console.log('Performing recognition...');
@@ -105,8 +182,11 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
     
     console.log('Enhanced HTR complete, confidence:', result.data.confidence);
     
-    // Dodatečné post-zpracování textu
-    const enhancedText = postprocessHandwrittenText(result.data.text);
+    // Dodatečné post-zpracování textu - aplikuje několik vrstev korekcí
+    let enhancedText = postprocessHandwrittenText(result.data.text);
+    
+    // Pokročilá korekce pro běžné tvary deníkových zápisů
+    enhancedText = applyDiarySpecificCorrections(enhancedText);
     
     return {
       success: true,
