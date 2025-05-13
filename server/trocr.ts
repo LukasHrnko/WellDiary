@@ -1,14 +1,12 @@
 /**
- * Optimalizované TrOCR-inspired HTR modul (Python bridge)
+ * Optimalizované TrOCR-inspired HTR modul (Node.js implementace)
  * 
- * Tento modul implementuje rozpoznávání rukopisu podobné TrOCR od Microsoftu pomocí 
- * Python bridge a kombinace knihoven OpenCV a pytesseract s paralelním zpracováním
- * a pokročilými technikami předzpracování obrazu pro vyšší přesnost a rychlost.
+ * Tento modul implementuje rozpoznávání rukopisu pomocí Node.js a tesseract.js
+ * Optimalizováno pro lepší rozpoznávání českého rukopisu.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { spawn } from 'child_process';
 
 interface HTRResult {
@@ -16,14 +14,11 @@ interface HTRResult {
   text: string;
   confidence?: number;
   error?: string;
-  best_variant?: number;
-  best_orientation?: number;
   execution_time?: number;
 }
 
 /**
  * Perform optimized TrOCR-inspired HTR (Handwritten Text Recognition) on an image
- * Využívá paralelní zpracování různých variant předzpracování obrazu pro lepší výsledky
  * 
  * @param imagePath Path to the image file
  * @param language Language code (default: 'eng')
@@ -37,16 +32,16 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
   const startTime = Date.now(); // Měření celkové doby zpracování
 
   try {
-    // Specify the real OCR Python script path
-    const pythonScriptPath = path.join(process.cwd(), 'server', 'real_trocr.py');
+    // Specify the Node.js script path
+    const nodeTrocrPath = path.join(process.cwd(), 'server', 'node_trocr.js');
     
-    // Check if Python script exists
-    if (!fs.existsSync(pythonScriptPath)) {
-      console.error(`Python skript nebyl nalezen: ${pythonScriptPath}`);
+    // Check if Node.js script exists
+    if (!fs.existsSync(nodeTrocrPath)) {
+      console.error(`Node.js skript nebyl nalezen: ${nodeTrocrPath}`);
       return {
         success: false,
         text: '',
-        error: `Python skript nebyl nalezen: ${pythonScriptPath}`
+        error: `Node.js skript nebyl nalezen: ${nodeTrocrPath}`
       };
     }
     
@@ -60,56 +55,38 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
       };
     }
     
-    console.log(`Používám Python skript: ${pythonScriptPath}`);
+    console.log(`Používám Node.js skript: ${nodeTrocrPath}`);
     
-    // Make Python script executable
-    await fs.promises.chmod(pythonScriptPath, 0o755);
-    
-    // Check if tessdata directory exists
-    const tessdataPath = path.join(process.cwd(), 'tessdata');
-    if (fs.existsSync(tessdataPath)) {
-      console.log(`Nalezena tessdata složka: ${tessdataPath}`);
-      // Set TESSDATA_PREFIX environment variable for the child process
-      process.env.TESSDATA_PREFIX = tessdataPath;
-    } else {
-      console.warn(`Tessdata složka nebyla nalezena: ${tessdataPath}`);
-    }
-    
-    // Spawn Python process with improved error handling and optimized timeouts
-    const pythonPath = '/home/runner/workspace/.pythonlibs/bin/python3';
-    const pythonProcess = spawn(pythonPath, [
-      pythonScriptPath,
+    // Spawn Node.js process with improved error handling and optimized timeouts
+    const nodeProcess = spawn('node', [
+      nodeTrocrPath,
       imagePath,
       language
     ], {
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+      env: { ...process.env }
     });
     
     // Collect stdout data
     let stdoutData = '';
     let stderrData = '';
     
-    pythonProcess.stdout.on('data', (data) => {
+    nodeProcess.stdout.on('data', (data) => {
       const chunk = data.toString();
       stdoutData += chunk;
-      // Omezený výstup pro přehlednost logů
-      if (chunk.includes('Paralelní zpracování') || chunk.includes('Nalezeno') || chunk.includes('Celkový čas')) {
-        console.log(`Python stdout: ${chunk}`);
-      }
     });
     
-    pythonProcess.stderr.on('data', (data) => {
+    nodeProcess.stderr.on('data', (data) => {
       const chunk = data.toString();
       stderrData += chunk;
-      console.error(`Python stderr: ${chunk}`);
+      console.error(`Node.js stderr: ${chunk}`);
     });
     
-    // Return a promise that resolves when the Python process exits
+    // Return a promise that resolves when the Node.js process exits
     return new Promise<HTRResult>((resolve) => {
-      // Set a timeout in case Python process hangs - zkráceno na 60 sekund díky optimalizacím
+      // Set a timeout in case Node.js process hangs
       const timeout = setTimeout(() => {
-        console.error('Python proces - timeout po 60 sekundách');
-        pythonProcess.kill();
+        console.error('Node.js proces - timeout po 60 sekundách');
+        nodeProcess.kill();
         resolve({
           success: false,
           text: '',
@@ -117,108 +94,59 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
         });
       }, 60000);
       
-      pythonProcess.on('close', (code) => {
+      nodeProcess.on('close', (code) => {
         clearTimeout(timeout);
         const processingTime = (Date.now() - startTime) / 1000; // v sekundách
-        console.log(`Python proces dokončen s kódem ${code} za ${processingTime.toFixed(2)} sekund`);
+        console.log(`Node.js proces dokončen s kódem ${code} za ${processingTime.toFixed(2)} sekund`);
         
         if (code !== 0) {
-          console.error(`Python chyba: ${stderrData}`);
+          console.error(`Node.js chyba: ${stderrData}`);
           resolve({ 
             success: false, 
             text: '', 
-            error: `Python proces selhal s kódem ${code}: ${stderrData.substring(0, 500)}${stderrData.length > 500 ? '...' : ''}` 
+            error: `Node.js proces selhal s kódem ${code}: ${stderrData.substring(0, 500)}${stderrData.length > 500 ? '...' : ''}` 
           });
           return;
         }
         
         try {
-          // Hledáme výstup JSON (může být obklopen jinými logy)
-          const lines = stdoutData.trim().split('\n');
-          // Poslední řádek by měl obsahovat JSON výstup
-          const lastLine = lines[lines.length - 1];
+          // Parse JSON output from Node.js script
+          const result = JSON.parse(stdoutData);
+          console.log(`Rozpoznávání dokončeno: úspěch=${result.success}, délka textu=${result.text?.length || 0}, důvěryhodnost=${result.confidence?.toFixed(2) || 0}`);
           
-          try {
-            // Pokus o zpracování JSON
-            const result = JSON.parse(lastLine) as HTRResult;
-            console.log(`Rozpoznávání dokončeno: úspěch=${result.success}, délka textu=${result.text?.length || 0}, důvěryhodnost=${result.confidence?.toFixed(2) || 0}`);
-            
-            // Přidání času zpracování, pokud nebyl zahrnut ve výsledku
-            if (!result.execution_time) {
-              result.execution_time = processingTime;
-            }
-            
-            resolve(result);
-            return;
-          } catch (parseError: any) {
-            console.error('Chyba parsování JSON výstupu:', parseError);
-            // Pokračujeme k záložnímu postupu
+          // Add processing time if not included in the result
+          if (!result.execution_time) {
+            result.execution_time = processingTime;
           }
           
-          // Záložní postup - vyhledání JSON kdekoli ve výstupu (bez dotAll vlajky)
-          // Hledání sekvence začínající { a končící }, může obsahovat cokoli mezi tím
-          const openBraceIndex = stdoutData.lastIndexOf('{');
-          if (openBraceIndex !== -1) {
-            const possibleJson = stdoutData.substring(openBraceIndex);
-            const closeBraceIndex = possibleJson.indexOf('}');
-            if (closeBraceIndex !== -1) {
-              const extractedJson = possibleJson.substring(0, closeBraceIndex + 1);
-              try {
-                const result = JSON.parse(extractedJson) as HTRResult;
-                console.log(`Záložní zpracování JSON: nalezen výsledek pomocí extrakce`);
-                
-                if (!result.execution_time) {
-                  result.execution_time = processingTime;
-                }
-                
-                resolve(result);
-                return;
-              } catch (matchError: any) {
-                console.error('Chyba parsování extrahovaného JSON:', matchError);
-              }
-            }
-          }
-          
-          // Pokud vše selže, vrátíme chybu
+          resolve(result);
+        } catch (error) {
+          console.error(`Chyba při parsování JSON výstupu: ${error}`);
           resolve({ 
             success: false, 
             text: '', 
-            error: `Nepodařilo se zpracovat výstup Python skriptu. Poslední řádek: ${lastLine?.substring(0, 200)}...` 
-          });
-        } catch (error: any) {
-          console.error(`Chyba během zpracování Python výstupu: ${error}`);
-          resolve({ 
-            success: false, 
-            text: '', 
-            error: `Chyba během zpracování Python výstupu: ${error}. Výstup: ${stdoutData.substring(0, 200)}...` 
+            error: `Chyba při parsování výstupu: ${error}` 
           });
         }
       });
       
-      pythonProcess.on('error', (error) => {
+      nodeProcess.on('error', (error) => {
         clearTimeout(timeout);
-        console.error(`Nepodařilo se spustit Python proces: ${error}`);
+        console.error(`Nepodařilo se spustit Node.js proces: ${error}`);
         resolve({ 
           success: false, 
           text: '', 
-          error: `Nepodařilo se spustit Python proces: ${error}` 
+          error: `Nepodařilo se spustit Node.js proces: ${error}` 
         });
       });
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error(`Chyba během TrOCR zpracování: ${error}`);
     return {
       success: false,
       text: '',
       error: `Chyba během TrOCR zpracování: ${error}`
     };
-  } finally {
-    // Vždy uklidíme dočasné soubory
-    try {
-      cleanupImage(imagePath);
-    } catch (cleanupError) {
-      console.error('Chyba při čištění dočasných souborů:', cleanupError);
-    }
   }
 }
 
