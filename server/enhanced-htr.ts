@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import sharp from 'sharp';
-import { createWorker } from 'tesseract.js';
+import { createWorker, PSM } from 'tesseract.js';
 
 interface HTRResult {
   success: boolean;
@@ -78,8 +78,8 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
       // LSTM OCR engine - lepší pro rukopis
       tessedit_ocr_engine_mode: '2',
       
-      // Segmentace stránky - hodnota 6 odpovídá PSM.SINGLE_BLOCK
-      tessedit_pageseg_mode: 6,
+      // Segmentace stránky - hodnota PSM.SINGLE_BLOCK
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
       
       // Specifický whitelist znaků pro deníkové záznamy
       tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:\'"-()!?/$ ',
