@@ -116,7 +116,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Check for new achievements
-      checkAndUpdateAchievements(req.user.id).catch(err => 
+      const userId1 = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      checkAndUpdateAchievements(userId1).catch(err => 
         console.error("Failed to check achievements:", err)
       );
       
@@ -420,6 +421,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/activity", async (req: Request, res: Response) => {
     try {
+      // Kontrola přihlášení uživatele
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
       const { steps, date } = req.body;
       
       if (steps === undefined || steps < 0) {
@@ -429,7 +435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeDate = safeParseDate(date);
       
       const activity = await storage.insertActivity({
-        userId: MOCK_USER_ID,
+        userId: req.user.id,
         steps,
         date: safeDate
       });
@@ -594,6 +600,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/sleep", async (req: Request, res: Response) => {
     try {
+      // Kontrola přihlášení uživatele
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
       const { hours, date } = req.body;
       
       if (hours === undefined || hours < 0 || hours > 24) {
@@ -603,7 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeDate = safeParseDate(date);
       
       const sleep = await storage.insertSleep({
-        userId: MOCK_USER_ID,
+        userId: req.user.id,
         hours,
         date: safeDate
       });
