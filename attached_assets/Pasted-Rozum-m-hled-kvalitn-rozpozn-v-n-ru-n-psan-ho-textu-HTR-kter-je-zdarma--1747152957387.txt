@@ -1,0 +1,87 @@
+Rozumím – hledáš **kvalitní rozpoznávání ručně psaného textu (HTR)**, které je:
+
+✅ **zdarma**
+✅ **lokálně spustitelné (bez cloud API)**
+✅ **kvalitní (dostatečně přesné)**
+✅ **použitelné v rámci webové/Node.js aplikace**
+
+---
+
+### 🔧 Shrnutí nejlepší možné volby pro tvůj případ:
+
+## 🥇 **Kraken OCR (HTR) – nejlepší volba**
+
+Kraken je open-source HTR engine navržený přímo pro **ručně psaný text**, včetně historického i moderního. Jeho hlavní výhody:
+
+* ✅ Skvělé výsledky u HTR (nejen OCR)
+* ✅ Plně **lokální provoz** – nepotřebuje žádné API
+* ✅ Předtrénované modely dostupné zdarma
+* ✅ Možnost vytvoření vlastního REST API (komunikace s Node.js je snadná)
+* ✅ Aktivně vyvíjený
+* ❗ Běží v Pythonu (ale lze snadno propojit s Node.js)
+
+📎 GitHub: [https://github.com/mittagessen/kraken](https://github.com/mittagessen/kraken)
+
+---
+
+### 💡 Doporučené řešení pro tebe:
+
+1. **Nainstaluj Kraken (v Pythonu)**
+
+```bash
+pip install kraken
+```
+
+2. **Použij předtrénovaný model pro ručně psaný text:**
+
+```bash
+kraken -i obraz.png out.txt segment -bl + recognize -m model.mlmodel
+```
+
+3. **Volitelně vytvoř jednoduchý lokální REST API v Pythonu (např. Flask):**
+
+```python
+from flask import Flask, request
+import subprocess
+
+app = Flask(__name__)
+
+@app.route('/ocr', methods=['POST'])
+def ocr():
+    file = request.files['image']
+    file.save('input.png')
+    subprocess.run(['kraken', '-i', 'input.png', 'out.txt', 'segment', '-bl', '+', 'recognize'])
+    with open('out.txt', 'r', encoding='utf-8') as f:
+        return f.read()
+
+app.run(port=5000)
+```
+
+4. **Zavolej z Node.js přes `fetch` nebo `axios`:**
+
+```js
+const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
+
+const form = new FormData();
+form.append('image', fs.createReadStream('./your_image.png'));
+
+axios.post('http://localhost:5000/ocr', form, {
+  headers: form.getHeaders(),
+}).then(res => {
+  console.log(res.data);
+});
+```
+
+---
+
+### 🔚 Výsledek:
+
+* Můžeš **lokálně a zdarma** rozpoznávat ručně psaný text
+* Integrace do webové aplikace je snadná přes jednoduché API
+* Bez limitů, bez odesílání dat do cloudu
+
+---
+
+Chceš, abych ti poslal hotový balíček (Node + Python REST API + jednoduchý klient)? Stačí říct.
