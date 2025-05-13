@@ -229,7 +229,7 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
  * @returns Path to the saved image
  */
 export function saveUploadedImage(buffer: Buffer, filename: string): string {
-  const tmpDir = path.join(os.tmpdir(), 'welldiary-uploads');
+  const tmpDir = path.join('/tmp', 'welldiary-uploads');
   
   // Create temporary directory if it doesn't exist
   if (!fs.existsSync(tmpDir)) {

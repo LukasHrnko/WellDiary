@@ -12,19 +12,10 @@ interface JournalUploaderProps {
   onSuccess: (data: { journalId: number, text: string }) => void;
 }
 
-type OcrMethod = 'standard' | 'paddle' | 'webai' | 'htr' | 'enhanced-htr' | 'handwriting' | 'trocr' | 'quick' | 'huggingface' | 'kraken';
+type OcrMethod = 'trocr';
 
 const methodLabels: Record<OcrMethod, string> = {
-  'standard': 'Standardní OCR (pro tištěný text)',
-  'paddle': 'PaddleOCR (lepší pro tištěný text)',
-  'webai': 'WebAI OCR (optimalizováno pro digitální text)',
-  'htr': 'HTR Základní (ruční text - základní)',
-  'enhanced-htr': 'HTR Vylepšený (multi-průchod)',
-  'handwriting': 'Handwriting.js (specializovaná knihovna)',
-  'trocr': 'TrOCR (Microsoft přes Python bridge)',
-  'quick': 'Rychlé OCR (odlehčená verze pro pomalá zařízení)',
-  'huggingface': 'Hugging Face TrOCR (nejlepší pro rukopis)',
-  'kraken': 'Kraken OCR (pro starší rukopisy)'
+  'trocr': 'TrOCR (Optimalizovaný s podporou češtiny)'
 };
 
 export function JournalUploader({ onSuccess }: JournalUploaderProps) {
@@ -32,7 +23,7 @@ export function JournalUploader({ onSuccess }: JournalUploaderProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [recognizedText, setRecognizedText] = useState<string>('');
   const [confidence, setConfidence] = useState<number | null>(null);
-  const [method, setMethod] = useState<OcrMethod>('enhanced-htr');
+  const [method, setMethod] = useState<OcrMethod>('trocr');
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
@@ -70,8 +61,8 @@ export function JournalUploader({ onSuccess }: JournalUploaderProps) {
       const formData = new FormData();
       formData.append('journal', file);
       
-      // Vybrat správný endpoint podle zvolené metody
-      const endpoint = `/api/journal/upload/${method === 'standard' ? '' : method}`;
+      // Použijeme vždy jen TrOCR endpoint
+      const endpoint = '/api/journal/upload/trocr';
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -119,29 +110,11 @@ export function JournalUploader({ onSuccess }: JournalUploaderProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="ocr-method">Vyberte metodu rozpoznávání:</Label>
-          <RadioGroup 
-            id="ocr-method" 
-            value={method} 
-            onValueChange={(value) => setMethod(value as OcrMethod)}
-            className="grid grid-cols-1 md:grid-cols-2 gap-2"
-          >
-            {(Object.entries(methodLabels) as [OcrMethod, string][]).map(([value, label]) => (
-              <div key={value} className="flex items-center space-x-2">
-                <RadioGroupItem value={value} id={`method-${value}`} />
-                <Label htmlFor={`method-${value}`} className="cursor-pointer">
-                  {label}
-                  {value === 'enhanced-htr' && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">Doporučeno</span>
-                  )}
-                  {value === 'quick' && (
-                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">Pro pomalá zařízení</span>
-                  )}
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
+        <div className="text-sm text-primary font-medium mb-4">
+          <div className="flex items-center">
+            <span className="mr-2">Metoda rozpoznávání: TrOCR</span>
+            <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">Optimalizováno pro češtinu</span>
+          </div>
         </div>
         
         <div className="space-y-2">
@@ -210,7 +183,7 @@ export function JournalUploader({ onSuccess }: JournalUploaderProps) {
           <p className="flex items-start">
             <Brain className="mr-2 h-4 w-4 mt-0.5" />
             <span>
-              <strong>Tip:</strong> Pro nejlepší výsledky použijte vylepšenou HTR metodu pro ručně psaný text a standardní OCR pro tištěný text. Pokud dochází k časovému limitu, zkuste použít metodu "Rychlé OCR".
+              <strong>Tip:</strong> TrOCR je optimalizováno pro rozpoznávání českého rukopisu. Pro nejlepší výsledky ujistěte se, že je text na obrázku dobře viditelný a čitelný.
             </span>
           </p>
         </div>
