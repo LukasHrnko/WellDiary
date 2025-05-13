@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import tesseract from 'node-tesseract-ocr';
-// Since we're having issues with Jimp, we'll simplify our implementation by temporarily not using image preprocessing
+// Vzhledem k problémům s importem Jimp nebudeme provádět úpravy obrazu
+// a místo toho se zaměříme na lepší OCR konfiguraci a post-processing
 
 interface OCRResult {
   success: boolean;
@@ -23,8 +24,9 @@ if (!fs.existsSync(uploadDir)) {
  * @returns Cesta k předzpracovanému obrázku
  */
 async function preprocessImageForHTR(imagePath: string): Promise<string> {
-  // V budoucnu zde můžeme implementovat předzpracování obrazu
-  // Prozatím pouze vracíme původní obrázek
+  // Vzhledem k problémům s obrazovými knihovnami budeme pracovat přímo s originálním obrázkem
+  // a místo toho optimalizujeme OCR nastavení a post-processing
+  console.log("Using original image without preprocessing - optimizing OCR settings instead");
   return imagePath;
 }
 
@@ -40,11 +42,16 @@ export async function performWebAiOCR(imagePath: string): Promise<OCRResult> {
     const processedImagePath = await preprocessImageForHTR(imagePath);
     
     // Specializovaná konfigurace pro rozpoznávání rukopisu (HTR)
-    // Používáme pouze základní parametry, které nezpůsobují syntaktické chyby
+    // Používáme optimalizované parametry pro rukopis, které jsou bezpečné
     const config = {
       lang: 'eng',
-      oem: 1, // Neural net LSTM engine only - používá LSTM neuronovou síť
-      psm: 3, // Automatická detekce stránky s textem (lepší pro rukopis)
+      oem: 1,        // Neural net LSTM engine only - používá LSTM neuronovou síť pro rukopis
+      psm: 6,        // Předpokládá jednolitý blok textu - lepší pro deníkové zápisy
+      dpi: 300,      // Vyšší DPI pro lepší detail při rozpoznávání
+      tessjs_create_hocr: '0',  // Vypnutí HOCR výstupu pro rychlejší zpracování
+      tessjs_create_tsv: '0',   // Vypnutí TSV výstupu pro rychlejší zpracování
+      tessjs_create_box: '0',   // Vypnutí BOX výstupu pro rychlejší zpracování
+      'debug_file': '/dev/null' // Vypnutí ladění pro rychlejší zpracování
     };
     
     // Recognize text from the preprocessed image
@@ -93,15 +100,18 @@ export async function performWebAiOCR(imagePath: string): Promise<OCRResult> {
       .replace(/\b([Aa])dn\b/g, '$1nd') // Přehozené znaky
       .replace(/\b([Oo])f+ice\b/g, '$1ffice') // Oprava dvojitých souhlásek
       
-      // Korekce slov pro deník
+      // Korekce slov pro deník v EN + CZ
       .replace(/\bdear diary\b/gi, 'Dear Diary') // Správná kapitalizace "Dear Diary"
+      .replace(/\bmilý deníku\b/gi, 'Milý deníku') // CZ ekvivalent
       .replace(/\btoday\b/gi, 'Today') // Běžná slova v denících
+      .replace(/\bdnes\b/gi, 'Dnes') // CZ ekvivalent
       
       // Formátování datumů v různých formátech (časté v denících)
       .replace(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/g, '$1/$2/$3')
       .replace(/(\w+\s+\d{1,2})[,]\s*(\d{4})/g, '$1, $2') // Oprava formátu "Září 10, 2023"
+      .replace(/(\d{1,2})\.\s*(\d{1,2})\.(?:\s*|\.)(\d{2,4})/g, '$1.$2.$3') // CZ formát data 1.1.2023
       
-      // Rozpoznávání emocionálních slov pro lepší detekci nálady
+      // Rozpoznávání emocionálních slov pro lepší detekci nálady - EN
       .replace(/\bhappy\b/gi, 'happy')
       .replace(/\bsad\b/gi, 'sad')
       .replace(/\bangry\b/gi, 'angry')
@@ -113,7 +123,27 @@ export async function performWebAiOCR(imagePath: string): Promise<OCRResult> {
       .replace(/\bcalm\b/gi, 'calm')
       .replace(/\bpeaceful\b/gi, 'peaceful')
       
-      // Další vylepšení pro denní deník
+      // Rozpoznávání emocionálních slov pro lepší detekci nálady - CZ
+      .replace(/\bšťastný\b/gi, 'šťastný')
+      .replace(/\bsmutný\b/gi, 'smutný')
+      .replace(/\bnaštvaný\b/gi, 'naštvaný')
+      .replace(/\bnadšený\b/gi, 'nadšený')
+      .replace(/\bunavený\b/gi, 'unavený')
+      .replace(/\bvyčerpaný\b/gi, 'vyčerpaný')
+      .replace(/\bfrustrovaný\b/gi, 'frustrovaný')
+      .replace(/\búzkostný\b/gi, 'úzkostný')
+      .replace(/\bklidný\b/gi, 'klidný')
+      .replace(/\bspokojen[ýá]\b/gi, 'spokojený')
+      
+      // Běžná slova a fráze pro wellness deník - CZ
+      .replace(/\bnálada\b/gi, 'nálada')
+      .replace(/\bspánek\b/gi, 'spánek')
+      .replace(/\bhodnocení\b/gi, 'hodnocení')
+      .replace(/\baktivita\b/gi, 'aktivita')
+      .replace(/\bcvičení\b/gi, 'cvičení')
+      .replace(/\bcítím se\b/gi, 'cítím se')
+      
+      // Další vylepšení pro denní deník - EN měsíce
       .replace(/\bsept(?:ember)?\b/gi, 'September') // Zkratky měsíců
       .replace(/\boct(?:ober)?\b/gi, 'October')
       .replace(/\bnov(?:ember)?\b/gi, 'November')
@@ -126,6 +156,20 @@ export async function performWebAiOCR(imagePath: string): Promise<OCRResult> {
       .replace(/\bjun(?:e)?\b/gi, 'June')
       .replace(/\bjul(?:y)?\b/gi, 'July')
       .replace(/\baug(?:ust)?\b/gi, 'August')
+      
+      // České názvy měsíců
+      .replace(/\bled(?:en)?\b/gi, 'leden')
+      .replace(/\búno(?:r)?\b/gi, 'únor')
+      .replace(/\bbře(?:zen)?\b/gi, 'březen')
+      .replace(/\bdub(?:en)?\b/gi, 'duben')
+      .replace(/\bkvě(?:ten)?\b/gi, 'květen')
+      .replace(/\bčer(?:ven)?\b/gi, 'červen')
+      .replace(/\bčec(?:enec)?\b/gi, 'červenec')
+      .replace(/\bsrp(?:en)?\b/gi, 'srpen')
+      .replace(/\bzář(?:í)?\b/gi, 'září')
+      .replace(/\bříj(?:en)?\b/gi, 'říjen')
+      .replace(/\blis(?:topad)?\b/gi, 'listopad')
+      .replace(/\bpro(?:sinec)?\b/gi, 'prosinec')
       
       // Oprava často chybějících velkých písmen na začátku vět
       .replace(/([.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
