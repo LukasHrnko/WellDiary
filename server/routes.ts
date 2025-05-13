@@ -389,14 +389,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === Activity Routes ===
   
-  app.get("/api/activity", async (_req: Request, res: Response) => {
+  app.get("/api/activity", async (req: Request, res: Response) => {
     try {
       // Get all activity data
       const today = new Date();
       const startDate = format(subDays(today, 30), 'yyyy-MM-dd'); // last 30 days
       const endDate = format(today, 'yyyy-MM-dd');
       
-      const data = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
+      // Use user ID if authenticated, otherwise fall back to MOCK_USER_ID
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
+      const data = await storage.getActivity(userId, startDate, endDate);
       
       // Add formatted date string
       const activityWithDate = data.activity.map(activity => ({
@@ -501,6 +504,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/mood", async (req: Request, res: Response) => {
     try {
+      // Kontrola přihlášení uživatele
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
       const { value, date } = req.body;
       
       if (value === undefined || value < 1 || value > 10) {
@@ -510,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeDate = safeParseDate(date);
       
       const mood = await storage.insertMood({
-        userId: MOCK_USER_ID,
+        userId: req.user.id,
         value,
         date: safeDate
       });
@@ -555,14 +563,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === Sleep Routes ===
   
-  app.get("/api/sleep", async (_req: Request, res: Response) => {
+  app.get("/api/sleep", async (req: Request, res: Response) => {
     try {
       // Get all sleep data
       const today = new Date();
       const startDate = format(subDays(today, 30), 'yyyy-MM-dd'); // last 30 days
       const endDate = format(today, 'yyyy-MM-dd');
       
-      const data = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
+      // Use user ID if authenticated, otherwise fall back to MOCK_USER_ID
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
+      const data = await storage.getSleep(userId, startDate, endDate);
       
       // Add formatted date string
       const sleepWithDate = data.sleep.map(item => ({
