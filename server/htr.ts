@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 // Import knihovny Jimp pro zpracování obrazu
+// @ts-ignore - Jimp má problémy s typy v ESM
 import Jimp from 'jimp';
 import { createWorker, PSM } from 'tesseract.js';
 import { readFile } from 'fs/promises';
