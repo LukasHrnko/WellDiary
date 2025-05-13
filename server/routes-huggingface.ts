@@ -4,6 +4,9 @@ import * as storage from "./storage";
 import * as ocr from "./ocr";
 import * as huggingFaceOcr from "./huggingface-ocr";
 import * as ai from "./ai";
+import * as schema from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { db } from "@db";
 import multer from "multer";
 import { format } from "date-fns";
 
@@ -57,7 +60,24 @@ async function updateJournalInsights(userId: number): Promise<void> {
     );
     
     // Update the database with new insights
-    await storage.updateJournalInsights(userId, themes, correlations);
+    const journalInsight = {
+      userId,
+      lastUpdated: new Date(),
+      themes,
+      correlations
+    };
+    
+    // Check if insights already exist
+    const existingInsights = await storage.getJournalInsights(userId);
+    if (existingInsights) {
+      // Update existing insights
+      await db.update(schema.journalInsights)
+        .set(journalInsight)
+        .where(eq(schema.journalInsights.userId, userId));
+    } else {
+      // Insert new insights
+      await db.insert(schema.journalInsights).values(journalInsight);
+    }
     
     console.log("Journal insights updated successfully");
   } catch (error) {
@@ -81,7 +101,19 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
     
     // Update user achievements in database
     for (const achievementId of newAchievements) {
-      await storage.addUserAchievement(userId, achievementId);
+      const existingAchievement = await db.select()
+        .from(schema.userAchievements)
+        .where(eq(schema.userAchievements.userId, userId))
+        .where(eq(schema.userAchievements.achievementId, achievementId))
+        .limit(1);
+      
+      if (existingAchievement.length === 0) {
+        await db.insert(schema.userAchievements).values({
+          userId,
+          achievementId,
+          unlockedAt: new Date()
+        });
+      }
     }
     
     console.log(`User ${userId} earned ${newAchievements.length} new achievements`);
