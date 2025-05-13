@@ -40,16 +40,11 @@ export async function performWebAiOCR(imagePath: string): Promise<OCRResult> {
     const processedImagePath = await preprocessImageForHTR(imagePath);
     
     // Specializovaná konfigurace pro rozpoznávání rukopisu (HTR)
+    // Používáme pouze základní parametry, které nezpůsobují syntaktické chyby
     const config = {
       lang: 'eng',
-      oem: 1, // Neural net LSTM engine only
-      psm: 6, // Assume a single uniform block of text
-      // Další HTR optimalizace
-      textord_noise_rejrows: true, // Pomáhá s rukopisem s různou výškou řádků
-      textord_noise_rejwords: true, // Pomáhá s vynechanými písmeny v rukopisu
-      tessedit_ocr_engine_mode: 2, // LSTM only
-      preserve_interword_spaces: 1, // Zachovat mezery
-      tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.?!;:\'\"()-+=/ ', // Povolené znaky
+      oem: 1, // Neural net LSTM engine only - používá LSTM neuronovou síť
+      psm: 3, // Automatická detekce stránky s textem (lepší pro rukopis)
     };
     
     // Recognize text from the preprocessed image
