@@ -515,7 +515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Clean up temp file
-      webaiocr.cleanupImage(imagePath);
+      htr.cleanupImage(imagePath);
       
       // Generate journal insights
       await updateJournalInsights(MOCK_USER_ID);
@@ -525,12 +525,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ 
         success: true, 
-        message: "Journal processed successfully with Web AI Toolkit OCR",
-        journal
+        message: "Journal processed successfully with HTR (Handwritten Text Recognition)",
+        journalId: journal.id,
+        text: htrResult.text,
+        confidence: htrResult.confidence
       });
     } catch (error) {
-      console.error("Web AI Toolkit OCR processing error:", error);
-      res.status(500).json({ message: "Failed to process journal with Web AI Toolkit OCR" });
+      console.error("HTR processing error:", error);
+      res.status(500).json({ message: "Failed to process handwritten journal with HTR" });
     }
   });
   
