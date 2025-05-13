@@ -1288,9 +1288,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tips", async (_req: Request, res: Response) => {
     try {
       // Get recent user data for generating personalized tips
-      const recentMoods = await storage.getMoods(MOCK_USER_ID, 7);
-      const recentSleep = await storage.getSleep(MOCK_USER_ID, 7);
-      const recentActivity = await storage.getActivity(MOCK_USER_ID, 7);
+      const recentMoods = await storage.getMoods(MOCK_USER_ID, 7, 0);
+      const recentSleep = await storage.getSleep(MOCK_USER_ID, 7, 0);
+      const recentActivity = await storage.getActivity(MOCK_USER_ID, 7, 0);
       const recentJournals = await storage.getJournalEntries(MOCK_USER_ID, 7);
       
       // Generate personalized tips based on user data

@@ -135,11 +135,11 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
           // Hledáme výstup JSON (může být obklopen jinými logy)
           const lines = stdoutData.trim().split('\n');
           // Poslední řádek by měl obsahovat JSON výstup
-          const jsonOutput = lines[lines.length - 1];
+          const lastLine = lines[lines.length - 1];
           
           try {
             // Pokus o zpracování JSON
-            const result = JSON.parse(jsonOutput) as HTRResult;
+            const result = JSON.parse(lastLine) as HTRResult;
             console.log(`Rozpoznávání dokončeno: úspěch=${result.success}, délka textu=${result.text?.length || 0}, důvěryhodnost=${result.confidence?.toFixed(2) || 0}`);
             
             // Přidání času zpracování, pokud nebyl zahrnut ve výsledku
@@ -154,21 +154,27 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
             // Pokračujeme k záložnímu postupu
           }
           
-          // Záložní postup - vyhledání JSON kdekoli ve výstupu
-          const jsonMatch = stdoutData.match(/(\{.*\})/s);
-          if (jsonMatch && jsonMatch[1]) {
-            try {
-              const result = JSON.parse(jsonMatch[1]) as HTRResult;
-              console.log(`Záložní zpracování JSON: nalezen výsledek pomocí regex`);
-              
-              if (!result.execution_time) {
-                result.execution_time = processingTime;
+          // Záložní postup - vyhledání JSON kdekoli ve výstupu (bez dotAll vlajky)
+          // Hledání sekvence začínající { a končící }, může obsahovat cokoli mezi tím
+          const openBraceIndex = stdoutData.lastIndexOf('{');
+          if (openBraceIndex !== -1) {
+            const possibleJson = stdoutData.substring(openBraceIndex);
+            const closeBraceIndex = possibleJson.indexOf('}');
+            if (closeBraceIndex !== -1) {
+              const extractedJson = possibleJson.substring(0, closeBraceIndex + 1);
+              try {
+                const result = JSON.parse(extractedJson) as HTRResult;
+                console.log(`Záložní zpracování JSON: nalezen výsledek pomocí extrakce`);
+                
+                if (!result.execution_time) {
+                  result.execution_time = processingTime;
+                }
+                
+                resolve(result);
+                return;
+              } catch (matchError: any) {
+                console.error('Chyba parsování extrahovaného JSON:', matchError);
               }
-              
-              resolve(result);
-              return;
-            } catch (matchError: any) {
-              console.error('Chyba parsování nalezeného JSON:', matchError);
             }
           }
           
@@ -176,7 +182,7 @@ export async function performTrOCR(imagePath: string, language: string = 'eng'):
           resolve({ 
             success: false, 
             text: '', 
-            error: `Nepodařilo se zpracovat výstup Python skriptu. Poslední řádek: ${jsonOutput?.substring(0, 200)}...` 
+            error: `Nepodařilo se zpracovat výstup Python skriptu. Poslední řádek: ${lastLine?.substring(0, 200)}...` 
           });
         } catch (error: any) {
           console.error(`Chyba během zpracování Python výstupu: ${error}`);
