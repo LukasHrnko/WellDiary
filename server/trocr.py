@@ -35,10 +35,6 @@ def preprocess_image(image_path, variant=0):
         Preprocessed image as NumPy array
     """
     try:
-        # Create debug directory
-        debug_dir = os.path.join(os.getcwd(), 'debug_images')
-        os.makedirs(debug_dir, exist_ok=True)
-        
         # Load image
         image = cv2.imread(image_path)
         if image is None:
@@ -48,9 +44,6 @@ def preprocess_image(image_path, variant=0):
         
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # Save original grayscale for debugging
-        cv2.imwrite(os.path.join(debug_dir, 'original_gray.png'), gray)
         
         # Processing pipeline based on variant
         processed = None
@@ -163,15 +156,17 @@ def preprocess_image(image_path, variant=0):
             print(f"Warning: Preprocessing variant {variant} failed, using original image")
             processed = gray
         
-        # Save the processed variant for debugging
-        cv2.imwrite(os.path.join(debug_dir, f'variant_{variant}.png'), processed)
-        
+        # Debugging files disabled for performance
         return processed
         
     except Exception as e:
         print(f"Error in preprocessing variant {variant}: {str(e)}")
-        # Return original grayscale as fallback
-        return gray
+        # Return a blank image as fallback if we can't access 'gray'
+        try:
+            return gray
+        except:
+            print("Could not access grayscale image, returning blank")
+            return np.zeros((100, 100), dtype=np.uint8)
 
 def recognize_text(image, orientation=0, lang='eng'):
     """
@@ -186,10 +181,6 @@ def recognize_text(image, orientation=0, lang='eng'):
         Tuple of (text, confidence)
     """
     try:
-        # Create debug directory
-        debug_dir = os.path.join(os.getcwd(), 'debug_images')
-        os.makedirs(debug_dir, exist_ok=True)
-        
         # Rotate image if needed
         if orientation != 0:
             h, w = image.shape[:2]
@@ -198,22 +189,16 @@ def recognize_text(image, orientation=0, lang='eng'):
             image = cv2.warpAffine(image, rotation_matrix, (w, h), 
                                   flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
         
-        # Save the oriented image for debugging
-        cv2.imwrite(os.path.join(debug_dir, f'oriented_{orientation}.png'), image)
-        
         # Check if we have the language data, fallback to 'eng' if not
         if lang != 'eng' and not os.path.exists(os.path.join(TESSDATA_PREFIX, f'{lang}.traineddata')):
             print(f"Warning: Training data for {lang} not found, falling back to eng")
             lang = 'eng'
         
-        # Define different combinations of PSM and OEM to try
+        # PERFORMANCE OPTIMIZATION: Use only the most promising configurations
+        # Define different combinations of PSM and OEM to try - reduced set for speed
         configs = [
             {'psm': 6, 'oem': 3, 'params': ''},  # Default neural net LSTM model
             {'psm': 3, 'oem': 3, 'params': ''},  # LSTM model, full page
-            {'psm': 4, 'oem': 3, 'params': ''},  # Default LSTM with column mode
-            {'psm': 11, 'oem': 3, 'params': ''}, # LSTM model, sparse text
-            {'psm': 1, 'oem': 3, 'params': ''},  # Auto page segmentation with OSD
-            {'psm': 6, 'oem': 1, 'params': ''},  # Legacy engine only
         ]
         
         best_text = ""
@@ -227,57 +212,60 @@ def recognize_text(image, orientation=0, lang='eng'):
                 
                 print(f"Trying configuration: {config}")
                 
-                # Get OCR result with confidence
-                data = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DICT)
-                
-                # Extract text and calculate average confidence
-                text_parts = []
-                confidence_sum = 0
-                confidence_count = 0
-                
-                for i in range(len(data['text'])):
-                    if data['text'][i].strip():
-                        text_parts.append(data['text'][i])
-                        confidence_sum += float(data['conf'][i])
-                        confidence_count += 1
-                
-                if confidence_count == 0:
-                    continue
+                # Get OCR result with confidence - OPTIMIZED: direct string output for speed
+                if config_params == configs[0]:  # Only do detailed analysis for the first config
+                    # Get OCR result with confidence
+                    data = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DICT)
                     
-                text = ' '.join(text_parts)
-                confidence = confidence_sum / confidence_count
+                    # Extract text and calculate average confidence
+                    text_parts = []
+                    confidence_sum = 0
+                    confidence_count = 0
+                    
+                    for i in range(len(data['text'])):
+                        if data['text'][i].strip():
+                            text_parts.append(data['text'][i])
+                            confidence_sum += float(data['conf'][i])
+                            confidence_count += 1
+                    
+                    if confidence_count == 0:
+                        continue
+                        
+                    text = ' '.join(text_parts)
+                    confidence = confidence_sum / confidence_count
+                else:
+                    # For subsequent configs, just get the text quickly
+                    text = pytesseract.image_to_string(image, config=config)
+                    confidence = 75.0  # Estimated confidence
                 
-                # Calculate quality score
+                # Quick quality assessment
+                if not text.strip():
+                    continue
+                
+                # Calculate quality score (simplified for speed)
                 alpha_count = sum(c.isalnum() for c in text)
                 total_count = max(1, len(text))
                 char_ratio = alpha_count / total_count
+                quality_score = confidence * (min(len(text), 200) / 100) * char_ratio
                 
-                # Prefer results with more alphanumeric characters
-                if len(text) > 10:
-                    quality_score = confidence * (min(len(text), 200) / 100) * char_ratio * 1.5
-                else:
-                    quality_score = confidence * (len(text) / 100) * char_ratio
-                
-                print(f"PSM {config_params['psm']}, OEM {config_params['oem']}: {text[:40]}... (score: {quality_score:.2f}, conf: {confidence:.2f})")
+                print(f"Config {config_params['psm']}: {text[:40]}... (score: {quality_score:.2f})")
                 
                 if quality_score > best_conf:
                     best_text = text
                     best_conf = confidence
                     best_config = config_params
-            
             except Exception as e:
-                print(f"OCR error with PSM {config_params['psm']}, OEM {config_params['oem']}: {str(e)}")
+                print(f"OCR error with config {config_params['psm']}: {str(e)}")
                 continue
         
         if best_text:
             if best_config:
-                print(f"Selected best result from PSM {best_config['psm']}, OEM {best_config['oem']}")
+                print(f"Selected best result from PSM {best_config['psm']}")
             return best_text, best_conf
         else:
-            # Fall back to basic OCR if all PSM modes failed
+            # Quick fallback
             try:
                 text = pytesseract.image_to_string(image, lang=lang)
-                print(f"Using fallback method, got: {text[:40]}...")
                 return text, 50.0  # Default confidence for fallback
             except Exception as e:
                 print(f"Fallback OCR error: {str(e)}")
@@ -309,21 +297,12 @@ def perform_handwriting_recognition(image_path, language='eng'):
                 "error": f"Image file not found: {image_path}"
             }
         
-        # Create debug directory
-        debug_dir = os.path.join(os.getcwd(), 'debug_images')
-        os.makedirs(debug_dir, exist_ok=True)
+        # Optimized for performance in replit environment
+        # We'll use a subset of preprocessing variants and orientations
+        variants = [0, 1, 2, 5, 9]  # Just the best preprocessing variants
+        orientations = [0, 270]  # Most common orientations
         
-        # Copy the original file to the debug directory
-        import shutil
-        try:
-            shutil.copy(image_path, os.path.join(debug_dir, 'original.png'))
-        except Exception as e:
-            print(f"Warning: Could not copy original image: {str(e)}")
-        
-        variants = 10  # Number of preprocessing variants (0-9)
-        orientations = [0, 90, 180, 270]  # Degrees
-        
-        print(f"Processing with {variants} preprocessing variants × {len(orientations)} orientations = {variants * len(orientations)} combinations")
+        print(f"Processing with {len(variants)} preprocessing variants × {len(orientations)} orientations = {len(variants) * len(orientations)} combinations")
         
         best_text = ""
         best_confidence = 0
@@ -331,8 +310,8 @@ def perform_handwriting_recognition(image_path, language='eng'):
         
         results = []
         
-        # Try all combinations of preprocessing and orientations
-        for variant in range(variants):
+        # Try selected combinations of preprocessing and orientations
+        for variant_idx, variant in enumerate(variants):
             print(f"Applying preprocessing variant {variant}...")
             processed_image = preprocess_image(image_path, variant)
             
