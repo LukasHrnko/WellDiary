@@ -5,9 +5,8 @@
  * pro model TrOCR specializovaný na rozpoznávání ručního písma.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import fs from 'fs';
+import path from 'path';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 
@@ -18,13 +17,6 @@ interface OCRResult {
   error?: string;
 }
 
-// Cesta pro dočasné soubory
-const uploadDir = path.join(os.tmpdir(), 'welldiary-uploads');
-// Zajistit, že adresář existuje
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 /**
  * Perform Hugging Face TrOCR handwritten text recognition
  * 
@@ -32,104 +24,111 @@ if (!fs.existsSync(uploadDir)) {
  * @returns Promise with OCR result containing text or error
  */
 export async function performHuggingFaceOCR(imagePath: string): Promise<OCRResult> {
-  console.log('Starting Hugging Face TrOCR processing');
-  console.log(`Processing image: ${imagePath}`);
+  console.log('Starting Hugging Face OCR processing for handwritten text');
+  console.log('Processing image:', imagePath);
   
-  try {
-    // Check if input image exists
-    if (!fs.existsSync(imagePath)) {
-      console.error(`Input image not found at: ${imagePath}`);
-      return {
-        success: false,
-        text: '',
-        error: `Input image not found at: ${imagePath}`
-      };
-    }
-    
-    // Create FormData with the image
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(imagePath));
-    
-    // Hugging Face Space URL for NielsRogge/TrOCR-handwriting
-    const apiUrl = 'https://nielsrogge-trocr-handwriting.hf.space/api/predict';
-    
-    console.log('Sending request to Hugging Face...');
-    
-    // Set timeout 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
-    
-    try {
-      // Send API request
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal as any, // Type casting to fix compatibility issues
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Hugging Face API error:', errorText);
-        return {
-          success: false,
-          text: '',
-          error: `API error: ${response.status} ${response.statusText}`
-        };
-      }
-      
-      // Parse response
-      const result = await response.json();
-      
-      // Hugging Face Space response format:
-      // { "data": ["recognized text"] }
-      if (result && result.data && Array.isArray(result.data) && result.data.length > 0) {
-        const recognizedText = result.data[0];
-        console.log(`Hugging Face TrOCR processing complete. Text length: ${recognizedText.length}`);
-        
-        return {
-          success: true,
-          text: recognizedText,
-          confidence: 0.9 // TrOCR typically has high confidence
-        };
-      } else {
-        console.error('Unexpected API response format:', result);
-        return {
-          success: false,
-          text: '',
-          error: 'Unexpected API response format'
-        };
-      }
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      
-      if (fetchError.name === 'AbortError') {
-        console.error('Request timeout after 90 seconds');
-        return {
-          success: false,
-          text: '',
-          error: 'Request timeout (90 seconds) - Hugging Face API is not responding'
-        };
-      }
-      
-      console.error('Fetch error:', fetchError);
-      return {
-        success: false,
-        text: '',
-        error: `Fetch error: ${fetchError.message || 'Unknown error'}`
-      };
-    }
-  } catch (error: any) {
-    console.error('Error in Hugging Face OCR:', error);
+  if (!fs.existsSync(imagePath)) {
+    console.error(`Input image not found at: ${imagePath}`);
     return {
       success: false,
       text: '',
-      error: `Error: ${error.message || 'Unknown error'}`
+      error: `Input image not found at: ${imagePath}`
     };
+  }
+  
+  // Create FormData with the image
+  const formData = new FormData();
+  formData.append('file', fs.createReadStream(imagePath));
+  
+  // Microsoft TrOCR API - použijeme dostupnou instanci přes Hugging Face API
+  // https://huggingface.co/microsoft/trocr-base-handwritten
+  const apiUrl = 'https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten';
+  
+  console.log('Sending request to Hugging Face...');
+  
+  // Set timeout 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
+  
+  try {
+    // Send API request
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal as any, // Type casting to fix compatibility issues
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Hugging Face API error:', errorText);
+      return {
+        success: false,
+        text: '',
+        error: `API error: ${response.status} ${response.statusText}`
+      };
+    }
+    
+    // Parse response
+    const result = await response.json();
+    console.log("Hugging Face API response:", JSON.stringify(result));
+    
+    // Hugging Face Inference API má jiný formát odpovědi
+    let recognizedText = '';
+    
+    if (typeof result === 'string') {
+      // Přímá odpověď jako text
+      recognizedText = result;
+    } else if (Array.isArray(result) && result.length > 0) {
+      // Odpověď jako pole textů
+      recognizedText = result[0];
+    } else if (result && result.generated_text) {
+      // Odpověď ve formátu { generated_text: "text" }
+      recognizedText = result.generated_text;
+    } else if (result && result.text) {
+      // Odpověď ve formátu { text: "text" }
+      recognizedText = result.text;
+    } else if (result && Array.isArray(result.data) && result.data.length > 0) {
+      // Původní formát z Hugging Face Space
+      recognizedText = result.data[0];
+    } else {
+      console.error('Unexpected API response format:', result);
+      return {
+        success: false,
+        text: '',
+        error: 'Unexpected API response format'
+      };
+    }
+    
+    console.log(`Hugging Face TrOCR processing complete. Text length: ${recognizedText.length}`);
+    
+    return {
+      success: true,
+      text: recognizedText,
+      confidence: 0.9 // TrOCR typically has high confidence
+    };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      console.error('Hugging Face API request timeout (90 seconds)');
+      return {
+        success: false,
+        text: '',
+        error: 'API request timeout after 90 seconds'
+      };
+    } else {
+      console.error('Error during Hugging Face API request:', error);
+      return {
+        success: false,
+        text: '',
+        error: error.message || 'Unknown error during API request'
+      };
+    }
   }
 }
 
@@ -141,12 +140,18 @@ export async function performHuggingFaceOCR(imagePath: string): Promise<OCRResul
  * @returns Path to the saved image
  */
 export function saveUploadedImage(buffer: Buffer, filename: string): string {
-  const timestamp = Date.now();
-  const savedFilename = `${timestamp}-${path.basename(filename)}`;
-  const filePath = path.join(uploadDir, savedFilename);
+  const uploadDir = '/tmp/welldiary-uploads';
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
   
-  fs.writeFileSync(filePath, buffer);
-  return filePath;
+  const timestamp = Date.now();
+  const safeName = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  const imagePath = path.join(uploadDir, `${timestamp}-${safeName}`);
+  
+  fs.writeFileSync(imagePath, buffer);
+  
+  return imagePath;
 }
 
 /**
@@ -158,8 +163,9 @@ export function cleanupImage(filePath: string): void {
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
+      console.log(`Cleaned up temporary file: ${filePath}`);
     }
-  } catch (error: any) {
-    console.error(`Error cleaning up image file: ${error.message || 'Unknown error'}`);
+  } catch (error) {
+    console.error(`Failed to clean up file: ${filePath}`, error);
   }
 }
