@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import fetch from 'node-fetch';
 
-const HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/trocr-large-handwritten";
+const HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten";
 
 interface OCRResult {
   success: boolean;
