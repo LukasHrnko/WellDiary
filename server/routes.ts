@@ -29,54 +29,27 @@ const MOCK_USER_ID = 1;
  * @returns ISO date string (YYYY-MM-DD)
  */
 function safeParseDate(dateStr: string | undefined): string {
+  if (!dateStr) {
+    return format(new Date(), 'yyyy-MM-dd');
+  }
+  
   try {
-    if (!dateStr) {
-      return new Date().toISOString().split('T')[0];
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      throw new Error('Invalid date');
     }
-
-    // Try to detect and fix common date formats
-    let normalizedDate = dateStr;
-    
-    // Handle "Month DD, YYYY" format (e.g. "September 22, 2020")
-    const monthNameMatch = dateStr.match(/([A-Za-z]+)\s+(\d{1,2})[\s,]+(\d{4})/);
-    if (monthNameMatch) {
-      const months: Record<string, number> = {
-        january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
-        july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
-      };
-      
-      const monthName = monthNameMatch[1].toLowerCase();
-      const day = parseInt(monthNameMatch[2], 10);
-      const year = parseInt(monthNameMatch[3], 10);
-      
-      if (months[monthName] !== undefined && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
-        const date = new Date(year, months[monthName], day);
-        if (!isNaN(date.getTime())) {
-          return date.toISOString().split('T')[0];
-        }
-      }
-    }
-    
-    // Check various date formats
-    const parsedDate = new Date(normalizedDate);
-    if (!isNaN(parsedDate.getTime())) {
-      return parsedDate.toISOString().split('T')[0];
-    }
-    
-    // Fallback to current date
-    return new Date().toISOString().split('T')[0];
-  } catch (error) {
-    console.error('Error parsing date:', error);
-    return new Date().toISOString().split('T')[0];
+    return format(date, 'yyyy-MM-dd');
+  } catch (e) {
+    return format(new Date(), 'yyyy-MM-dd');
   }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health check endpoint
+  // === Health Check ===
   app.get("/api/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok" });
+    res.status(200).json({ status: "healthy" });
   });
-
+  
   // === Journal Routes ===
   
   // API pro rozpoznávání rukopisných deníkových záznamů
@@ -142,29 +115,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Vytvoření záznamu aktivit
       if (journalData.activities && journalData.activities.length > 0) {
-        // Výpočet kroků na základě zjištěných aktivit
-        const hasExercise = journalData.activities.some(activity => 
-          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
-            activity.toLowerCase().includes(term)
-          )
-        );
-        
-        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
-        
+        // Výpočet kroků na základě aktivit
+        const activityCount = Math.floor(Math.random() * 4000) + 3000;
         await storage.insertActivity({
           userId: MOCK_USER_ID,
-          steps,
+          steps: activityCount,
           date
         });
       }
       
-      // Aktualizovat insighty na základě nového deníkového záznamu
-      await updateJournalInsights(MOCK_USER_ID);
+      // Aktualizace insights
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
       
-      // Kontrola nových ocenění
-      await checkAndUpdateAchievements(MOCK_USER_ID);
+      // Kontrola nových achievementů
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
       
-      // Vyčištění nahraného souboru
+      // Vyčištění dočasných souborů
       handwritingRecognition.cleanupImage(imagePath);
       
       res.status(200).json({
@@ -178,6 +148,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error handling handwriting recognition upload:", error);
       res.status(500).json({ 
         message: "Server error processing handwriting recognition", 
+        success: false 
+      });
+    }
+  });
+  
+  // API pro rozpoznávání rukopisu pomocí TrOCR (Python přes bridge)
+  app.post("/api/journal/upload/trocr", upload.single("journal"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded", success: false });
+      }
+      
+      // Uložení nahraného souboru
+      const imagePath = trocr.saveUploadedImage(
+        req.file.buffer, 
+        req.file.originalname
+      );
+      
+      console.log("Starting TrOCR Python bridge recognition process");
+      
+      // Rozpoznávání rukopisu pomocí Python bridge
+      // Pro české texty použijeme 'ces' jako kód jazyka
+      const language = req.body.language || 'eng';
+      const trResult = await trocr.performTrOCR(imagePath, language);
+      
+      if (!trResult.success) {
+        trocr.cleanupImage(imagePath);
+        return res.status(500).json({ 
+          message: trResult.error || "TrOCR recognition failed",
+          success: false
+        });
+      }
+      
+      console.log("TrOCR recognition complete. Confidence:", trResult.confidence);
+      
+      // Extrakce strukturovaných dat
+      const journalData = ocr.extractJournalData(trResult.text);
+      
+      // Bezpečné parsování data
+      const date = safeParseDate(journalData.date);
+      
+      // Vytvoření záznamu v deníku
+      const journal = await storage.insertJournal({
+        userId: MOCK_USER_ID,
+        content: journalData.content,
+        date,
+        imageUrl: null
+      });
+      
+      // Vytvoření záznamu nálady, pokud byl detekován
+      if (journalData.mood !== undefined) {
+        await storage.insertMood({
+          userId: MOCK_USER_ID,
+          value: journalData.mood,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu spánku, pokud byl detekován
+      if (journalData.sleep !== undefined) {
+        await storage.insertSleep({
+          userId: MOCK_USER_ID,
+          hours: journalData.sleep,
+          date
+        });
+      }
+      
+      // Vytvoření záznamu aktivit
+      if (journalData.activities && journalData.activities.length > 0) {
+        // Výpočet kroků na základě aktivit
+        const activityCount = Math.floor(Math.random() * 4000) + 3000;
+        await storage.insertActivity({
+          userId: MOCK_USER_ID,
+          steps: activityCount,
+          date
+        });
+      }
+      
+      // Aktualizace insights
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
+      
+      // Kontrola nových achievementů
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      // Vyčištění dočasných souborů
+      trocr.cleanupImage(imagePath);
+      
+      res.status(200).json({
+        message: "Journal entry created successfully",
+        journalId: journal.id,
+        text: trResult.text,
+        confidence: trResult.confidence,
+        success: true
+      });
+    } catch (error) {
+      console.error("Error handling TrOCR recognition upload:", error);
+      res.status(500).json({ 
+        message: "Server error processing TrOCR recognition", 
         success: false 
       });
     }
@@ -308,87 +380,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ entries });
     } catch (error) {
       console.error("Error fetching journal entries:", error);
-      res.status(500).json({ message: "Error fetching journal entries" });
+      res.status(500).json({ message: "Failed to fetch journal entries" });
     }
   });
   
-  // Get last journal upload date
   app.get("/api/journal/last-upload", async (_req: Request, res: Response) => {
     try {
-      const result = await storage.getLastJournalUpload(MOCK_USER_ID);
-      res.json(result);
+      const today = new Date();
+      
+      // Simulate last upload date as today or yesterday
+      const lastUploadDate = Math.random() > 0.5 ? 
+        format(today, 'yyyy-MM-dd') : 
+        format(subDays(today, 1), 'yyyy-MM-dd');
+      
+      res.json({ lastUploadDate });
     } catch (error) {
-      console.error("Error fetching last journal upload:", error);
-      res.status(500).json({ message: "Error fetching last journal upload" });
+      console.error("Error fetching last upload date:", error);
+      res.status(500).json({ message: "Failed to fetch last upload date" });
     }
   });
   
-  // Add journal entry
   app.post("/api/journal/entry", async (req: Request, res: Response) => {
     try {
-      const date = format(new Date(req.body.date), "yyyy-MM-dd");
+      const { content, date } = req.body;
       
-      // Create journal entry
+      if (!content) {
+        return res.status(400).json({ message: "Content is required" });
+      }
+      
+      const safeDate = safeParseDate(date);
+      
       const journal = await storage.insertJournal({
         userId: MOCK_USER_ID,
-        content: req.body.content,
-        date,
+        content,
+        date: safeDate,
         imageUrl: null
       });
       
-      // Create mood entry if provided
-      if (req.body.mood) {
+      // Extract structured data
+      const journalData = ocr.extractJournalData(content);
+      
+      // Insert mood if detected
+      if (journalData.mood !== undefined) {
         await storage.insertMood({
           userId: MOCK_USER_ID,
-          value: parseInt(req.body.mood),
-          date
+          value: journalData.mood,
+          date: safeDate
         });
       }
       
-      // Create sleep entry if provided
-      if (req.body.sleep) {
+      // Insert sleep if detected
+      if (journalData.sleep !== undefined) {
         await storage.insertSleep({
           userId: MOCK_USER_ID,
-          hours: parseFloat(req.body.sleep),
-          date
+          hours: journalData.sleep,
+          date: safeDate
         });
       }
       
-      // Create activity entry if activities provided
-      if (req.body.activities) {
-        const activities = req.body.activities.split(',').map((a: string) => a.trim());
-        
-        // Calculate steps estimate based on activities
-        const hasExercise = activities.some(activity => 
-          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
-            activity.toLowerCase().includes(term)
-          )
-        );
-        
-        // Create an activity entry with an estimated step count
-        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
-        
+      // Insert activity if activities detected
+      if (journalData.activities && journalData.activities.length > 0) {
+        const steps = Math.floor(Math.random() * 5000) + 3000;
         await storage.insertActivity({
           userId: MOCK_USER_ID,
           steps,
-          date
+          date: safeDate
         });
       }
       
-      // Generate journal insights
-      await updateJournalInsights(MOCK_USER_ID);
+      // Update journal insights
+      updateJournalInsights(MOCK_USER_ID).catch(err =>
+        console.error("Failed to update journal insights:", err)
+      );
       
       // Check for new achievements
-      await checkAndUpdateAchievements(MOCK_USER_ID);
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err =>
+        console.error("Failed to check achievements:", err)
+      );
       
-      res.status(201).json({ success: true, journal });
+      res.json({ journal });
     } catch (error) {
-      console.error("Error adding journal entry:", error);
-      res.status(500).json({ message: "Error adding journal entry" });
+      console.error("Error creating journal entry:", error);
+      res.status(500).json({ message: "Failed to create journal entry" });
     }
   });
   
-  // Upload and process journal image
+  // API pro standardní OCR
   app.post("/api/journal/upload", upload.single("journal"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -401,29 +478,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.file.originalname
       );
       
-      // Perform OCR on the image
+      // Process image with OCR
       const ocrResult = await ocr.performOCR(imagePath);
       
       if (!ocrResult.success) {
         ocr.cleanupImage(imagePath);
-        return res.status(500).json({ message: ocrResult.error || "OCR processing failed" });
+        return res.status(500).json({ message: ocrResult.error, success: false });
       }
       
-      // Extract structured data from OCR text
+      // Extract structured data
       const journalData = ocr.extractJournalData(ocrResult.text);
       
-      // Save to database using safe date parsing
+      // Create journal entry
       const date = safeParseDate(journalData.date);
       
-      // Create journal entry
       const journal = await storage.insertJournal({
         userId: MOCK_USER_ID,
         content: journalData.content,
         date,
-        imageUrl: null // We don't store the actual image, just the extracted content
+        imageUrl: null
       });
       
-      // Create mood entry if extracted
+      // Create mood entry if detected
       if (journalData.mood !== undefined) {
         await storage.insertMood({
           userId: MOCK_USER_ID,
@@ -432,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Create sleep entry if extracted
+      // Create sleep entry if detected
       if (journalData.sleep !== undefined) {
         await storage.insertSleep({
           userId: MOCK_USER_ID,
@@ -441,18 +517,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Save activities if extracted
-      if (journalData.activities.length > 0) {
-        // Calculate steps estimate based on activities
-        const hasExercise = journalData.activities.some(activity => 
-          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
-            activity.toLowerCase().includes(term)
-          )
-        );
-        
-        // Create an activity entry with an estimated step count
-        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
-        
+      // Create activity entry if activities detected
+      if (journalData.activities && journalData.activities.length > 0) {
+        const steps = Math.floor(Math.random() * 5000) + 3000;
         await storage.insertActivity({
           userId: MOCK_USER_ID,
           steps,
@@ -460,27 +527,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Clean up temp file
+      // Clean up the temporary image
       ocr.cleanupImage(imagePath);
       
-      // Generate journal insights
-      await updateJournalInsights(MOCK_USER_ID);
+      // Update insights asynchronously
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
       
       // Check for new achievements
-      await checkAndUpdateAchievements(MOCK_USER_ID);
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
       
-      res.json({ 
+      res.status(200).json({ 
         success: true, 
         message: "Journal processed successfully",
-        journal
+        journalId: journal.id,
+        text: ocrResult.text
       });
     } catch (error) {
       console.error("Error processing journal upload:", error);
-      res.status(500).json({ message: "Failed to process journal upload" });
+      res.status(500).json({ message: "Failed to process journal" });
     }
   });
   
-  // Upload and process journal image with PaddleJS OCR
+  // API pro vylepšené OCR pomocí PaddleOCR
   app.post("/api/journal/upload/paddle", upload.single("journal"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -493,29 +565,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.file.originalname
       );
       
-      // Perform OCR using PaddleJS
+      // Process image with PaddleOCR
       const ocrResult = await paddleocr.performPaddleOCR(imagePath);
       
       if (!ocrResult.success) {
         paddleocr.cleanupImage(imagePath);
-        return res.status(500).json({ message: ocrResult.error || "PaddleJS OCR processing failed" });
+        return res.status(500).json({ message: ocrResult.error, success: false });
       }
       
-      // Extract structured data from OCR text using the same extraction logic
+      // Extract structured data
       const journalData = ocr.extractJournalData(ocrResult.text);
       
-      // Save to database using safe date parsing
+      // Create journal entry
       const date = safeParseDate(journalData.date);
       
-      // Create journal entry
       const journal = await storage.insertJournal({
         userId: MOCK_USER_ID,
         content: journalData.content,
         date,
-        imageUrl: null // We don't store the actual image, just the extracted content
+        imageUrl: null
       });
       
-      // Create mood entry if extracted
+      // Create mood entry if detected
       if (journalData.mood !== undefined) {
         await storage.insertMood({
           userId: MOCK_USER_ID,
@@ -524,7 +595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Create sleep entry if extracted
+      // Create sleep entry if detected
       if (journalData.sleep !== undefined) {
         await storage.insertSleep({
           userId: MOCK_USER_ID,
@@ -533,46 +604,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Save activities if extracted
-      if (journalData.activities.length > 0) {
-        // Calculate steps estimate based on activities
-        const hasExercise = journalData.activities.some(activity => 
-          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
-            activity.toLowerCase().includes(term)
-          )
-        );
-        
-        // Create an activity entry with an estimated step count
-        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
-        
+      // Create activity entry if activities detected
+      if (journalData.activities && journalData.activities.length > 0) {
+        const activityCount = Math.floor(Math.random() * 4000) + 3000;
         await storage.insertActivity({
           userId: MOCK_USER_ID,
-          steps,
+          steps: activityCount,
           date
         });
       }
       
-      // Clean up temp file
+      // Clean up the temporary image
       paddleocr.cleanupImage(imagePath);
       
-      // Generate journal insights
-      await updateJournalInsights(MOCK_USER_ID);
+      // Update insights asynchronously
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
       
       // Check for new achievements
-      await checkAndUpdateAchievements(MOCK_USER_ID);
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
       
-      res.json({ 
+      res.status(200).json({ 
         success: true, 
-        message: "Journal processed successfully with PaddleJS OCR",
-        journal
+        message: "Journal processed successfully with PaddleOCR",
+        journalId: journal.id,
+        text: ocrResult.text
       });
     } catch (error) {
-      console.error("PaddleJS OCR processing error:", error);
-      res.status(500).json({ message: "Failed to process journal with PaddleJS OCR" });
+      console.error("Error processing journal with PaddleOCR:", error);
+      res.status(500).json({ message: "Failed to process journal with PaddleOCR" });
     }
   });
   
-  // Upload and process journal image with Web AI Toolkit OCR
+  // API pro rozpoznávání textu pomocí Web AI Toolkit
   app.post("/api/journal/upload/webai", upload.single("journal"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -585,29 +652,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.file.originalname
       );
       
-      // Perform OCR using Web AI Toolkit
-      const ocrResult = await webaiocr.performWebAiOCR(imagePath);
+      // Process image with Web AI Toolkit OCR
+      const ocrResult = await webaiocr.performWebAIOCR(imagePath);
       
       if (!ocrResult.success) {
         webaiocr.cleanupImage(imagePath);
-        return res.status(500).json({ message: ocrResult.error || "Web AI Toolkit OCR processing failed" });
+        return res.status(500).json({ message: ocrResult.error, success: false });
       }
       
-      // Extract structured data from OCR text using the same extraction logic
+      // Extract structured data
       const journalData = ocr.extractJournalData(ocrResult.text);
       
-      // Save to database using safe date parsing
+      // Create journal entry
       const date = safeParseDate(journalData.date);
       
-      // Create journal entry
       const journal = await storage.insertJournal({
         userId: MOCK_USER_ID,
         content: journalData.content,
         date,
-        imageUrl: null // We don't store the actual image, just the extracted content
+        imageUrl: null
       });
       
-      // Create mood entry if extracted
+      // Create mood entry if detected
       if (journalData.mood !== undefined) {
         await storage.insertMood({
           userId: MOCK_USER_ID,
@@ -616,7 +682,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Create sleep entry if extracted
+      // Create sleep entry if detected
       if (journalData.sleep !== undefined) {
         await storage.insertSleep({
           userId: MOCK_USER_ID,
@@ -625,9 +691,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Create activity entries if extracted
+      // Create activity entry if activities detected
       if (journalData.activities && journalData.activities.length > 0) {
-        const activityCount = journalData.activities.length * 1000; // Simple calculation based on number of activities
+        const activityCount = Math.floor(Math.random() * 4000) + 3000;
         await storage.insertActivity({
           userId: MOCK_USER_ID,
           steps: activityCount,
@@ -650,7 +716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(200).json({ 
         success: true, 
-        message: "Journal processed successfully",
+        message: "Journal processed successfully with Web AI Toolkit",
         journalId: journal.id,
         text: ocrResult.text
       });
@@ -676,33 +742,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.file.originalname
       );
       
-      console.log("Starting specialized HTR processing for handwritten text");
+      console.log("Starting HTR process for handwritten text");
       
-      // Perform HTR using TensorFlow + Tesseract
+      // Process image with HTR
       const htrResult = await htr.performHTR(imagePath);
       
       if (!htrResult.success) {
         htr.cleanupImage(imagePath);
-        return res.status(500).json({ message: htrResult.error || "HTR processing failed" });
+        return res.status(500).json({ message: htrResult.error, success: false });
       }
       
-      console.log("HTR processing complete. Confidence:", htrResult.confidence);
+      console.log("HTR processing complete. Text:", htrResult.text);
       
-      // Extract structured data from HTR text using the same extraction logic
+      // Extract structured data
       const journalData = ocr.extractJournalData(htrResult.text);
       
-      // Save to database using safe date parsing
+      // Create journal entry
       const date = safeParseDate(journalData.date);
       
-      // Create journal entry
       const journal = await storage.insertJournal({
         userId: MOCK_USER_ID,
         content: journalData.content,
         date,
-        imageUrl: null // We don't store the actual image, just the extracted content
+        imageUrl: null
       });
       
-      // Create mood entry if extracted
+      // Create mood entry if detected
       if (journalData.mood !== undefined) {
         await storage.insertMood({
           userId: MOCK_USER_ID,
@@ -711,7 +776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Create sleep entry if extracted
+      // Create sleep entry if detected
       if (journalData.sleep !== undefined) {
         await storage.insertSleep({
           userId: MOCK_USER_ID,
@@ -720,18 +785,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Save activities if extracted
-      if (journalData.activities.length > 0) {
-        // Calculate steps estimate based on activities
-        const hasExercise = journalData.activities.some(activity => 
-          ["walk", "run", "gym", "exercise", "workout", "jog", "swim", "yoga"].some(term => 
-            activity.toLowerCase().includes(term)
-          )
-        );
-        
-        // Create an activity entry with an estimated step count
-        const steps = hasExercise ? Math.floor(Math.random() * 5000) + 5000 : Math.floor(Math.random() * 3000) + 2000;
-        
+      // Create activity entry if activities detected
+      if (journalData.activities && journalData.activities.length > 0) {
+        const steps = Math.floor(Math.random() * 5000) + 3000;
         await storage.insertActivity({
           userId: MOCK_USER_ID,
           steps,
@@ -739,293 +795,313 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Clean up temp file
+      // Clean up the temporary image
       htr.cleanupImage(imagePath);
       
-      // Generate journal insights
-      await updateJournalInsights(MOCK_USER_ID);
+      // Update insights
+      updateJournalInsights(MOCK_USER_ID).catch(err => 
+        console.error("Failed to update journal insights:", err)
+      );
       
-      // Check for new achievements
-      await checkAndUpdateAchievements(MOCK_USER_ID);
+      // Check for achievements
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
       
-      res.json({ 
+      res.status(200).json({ 
         success: true, 
-        message: "Journal processed successfully with HTR (Handwritten Text Recognition)",
+        message: "Journal processed successfully with HTR",
         journalId: journal.id,
-        text: htrResult.text,
-        confidence: htrResult.confidence
+        text: htrResult.text
       });
     } catch (error) {
-      console.error("HTR processing error:", error);
-      res.status(500).json({ message: "Failed to process handwritten journal with HTR" });
+      console.error("Error processing journal with HTR:", error);
+      res.status(500).json({ message: "Failed to process journal with HTR" });
     }
   });
   
   // === Mood Routes ===
   
-  // Get mood data
   app.get("/api/mood", async (_req: Request, res: Response) => {
     try {
-      const now = new Date();
-      const startDate = format(startOfWeek(now), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      const data = await storage.getUserMoods(MOCK_USER_ID);
+      const average = data.length > 0
+        ? data.reduce((sum, entry) => sum + entry.value, 0) / data.length
+        : 0;
       
-      // Get mood data for the current week
-      const moodData = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
-      
-      // Get previous week data for comparison
-      const prevWeekStart = format(startOfWeek(subDays(now, 7)), "yyyy-MM-dd");
-      const prevWeekEnd = format(subDays(startOfWeek(now), 1), "yyyy-MM-dd");
-      const prevWeekData = await storage.getMoods(MOCK_USER_ID, prevWeekStart, prevWeekEnd);
-      
-      // Calculate weekly change
-      const weeklyChange = moodData.average - prevWeekData.average;
-      
-      res.json({ ...moodData, weeklyChange });
+      res.json({ 
+        moods: data, 
+        average: parseFloat(average.toFixed(1)) 
+      });
     } catch (error) {
-      console.error("Error fetching mood data:", error);
-      res.status(500).json({ message: "Error fetching mood data" });
+      console.error("Error fetching moods:", error);
+      res.status(500).json({ message: "Failed to fetch moods" });
     }
   });
   
-  // Add mood entry
   app.post("/api/mood", async (req: Request, res: Response) => {
     try {
-      const date = format(new Date(req.body.date), "yyyy-MM-dd");
+      const { value, date } = req.body;
+      
+      if (value === undefined || value < 1 || value > 10) {
+        return res.status(400).json({ message: "Invalid mood value. Must be between 1 and 10." });
+      }
+      
+      const safeDate = safeParseDate(date);
       
       const mood = await storage.insertMood({
         userId: MOCK_USER_ID,
-        value: parseInt(req.body.value),
-        date
+        value,
+        date: safeDate
       });
       
-      res.status(201).json(mood);
+      // Check for new achievements
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      res.json({ mood });
     } catch (error) {
-      console.error("Error adding mood entry:", error);
-      res.status(500).json({ message: "Error adding mood entry" });
+      console.error("Error creating mood entry:", error);
+      res.status(500).json({ message: "Failed to create mood entry" });
     }
   });
-
-  // Get monthly mood data
+  
   app.get("/api/mood/monthly", async (_req: Request, res: Response) => {
     try {
-      const now = new Date();
-      const startDate = format(new Date(now.getFullYear(), now.getMonth() - 2, 1), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      // Mock monthly mood data
+      const currentMonth = new Date().getMonth();
+      const monthlyData = [];
       
-      const monthlyData = await storage.getMonthlyMoodData(MOCK_USER_ID, startDate, endDate);
+      for (let i = 0; i < 6; i++) {
+        const month = (currentMonth - i + 12) % 12;
+        monthlyData.push({
+          month,
+          average: Math.random() * 5 + 3
+        });
+      }
       
-      res.json(monthlyData);
+      res.json({ monthlyData: monthlyData.reverse() });
     } catch (error) {
       console.error("Error fetching monthly mood data:", error);
-      res.status(500).json({ message: "Error fetching monthly mood data" });
+      res.status(500).json({ message: "Failed to fetch monthly mood data" });
     }
   });
   
   // === Sleep Routes ===
   
-  // Get sleep data
   app.get("/api/sleep", async (_req: Request, res: Response) => {
     try {
-      const now = new Date();
-      const startDate = format(startOfWeek(now), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      const data = await storage.getUserSleep(MOCK_USER_ID);
+      const average = data.length > 0
+        ? data.reduce((sum, entry) => sum + entry.hours, 0) / data.length
+        : 0;
       
-      // Get sleep data for the current week
-      const sleepData = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
-      
-      // Get previous week data for comparison
-      const prevWeekStart = format(startOfWeek(subDays(now, 7)), "yyyy-MM-dd");
-      const prevWeekEnd = format(subDays(startOfWeek(now), 1), "yyyy-MM-dd");
-      const prevWeekData = await storage.getSleep(MOCK_USER_ID, prevWeekStart, prevWeekEnd);
-      
-      // Calculate weekly change
-      const weeklyChange = sleepData.average - prevWeekData.average;
-      
-      res.json({ ...sleepData, weeklyChange });
+      res.json({ 
+        sleep: data, 
+        average: parseFloat(average.toFixed(1))
+      });
     } catch (error) {
       console.error("Error fetching sleep data:", error);
-      res.status(500).json({ message: "Error fetching sleep data" });
+      res.status(500).json({ message: "Failed to fetch sleep data" });
     }
   });
   
-  // Add sleep entry
   app.post("/api/sleep", async (req: Request, res: Response) => {
     try {
-      const date = format(new Date(req.body.date), "yyyy-MM-dd");
+      const { hours, date } = req.body;
+      
+      if (hours === undefined || hours < 0 || hours > 24) {
+        return res.status(400).json({ message: "Invalid sleep hours. Must be between 0 and 24." });
+      }
+      
+      const safeDate = safeParseDate(date);
       
       const sleep = await storage.insertSleep({
         userId: MOCK_USER_ID,
-        hours: parseFloat(req.body.hours),
-        date
+        hours,
+        date: safeDate
       });
       
-      res.status(201).json(sleep);
+      // Check for new achievements
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      res.json({ sleep });
     } catch (error) {
-      console.error("Error adding sleep entry:", error);
-      res.status(500).json({ message: "Error adding sleep entry" });
+      console.error("Error creating sleep entry:", error);
+      res.status(500).json({ message: "Failed to create sleep entry" });
     }
   });
   
-  // Get monthly sleep data
   app.get("/api/sleep/monthly", async (_req: Request, res: Response) => {
     try {
-      const now = new Date();
-      const startDate = format(new Date(now.getFullYear(), now.getMonth() - 2, 1), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      // Mock monthly sleep data
+      const currentMonth = new Date().getMonth();
+      const monthlyData = [];
       
-      const monthlyData = await storage.getMonthlySleepData(MOCK_USER_ID, startDate, endDate);
+      for (let i = 0; i < 6; i++) {
+        const month = (currentMonth - i + 12) % 12;
+        monthlyData.push({
+          month,
+          average: Math.random() * 3 + 5
+        });
+      }
       
-      res.json(monthlyData);
+      res.json({ monthlyData: monthlyData.reverse() });
     } catch (error) {
       console.error("Error fetching monthly sleep data:", error);
-      res.status(500).json({ message: "Error fetching monthly sleep data" });
+      res.status(500).json({ message: "Failed to fetch monthly sleep data" });
     }
   });
   
   // === Activity Routes ===
   
-  // Get activity data
   app.get("/api/activity", async (_req: Request, res: Response) => {
     try {
-      const now = new Date();
-      const startDate = format(startOfWeek(now), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      const data = await storage.getUserActivity(MOCK_USER_ID);
+      const average = data.length > 0
+        ? data.reduce((sum, entry) => sum + entry.steps, 0) / data.length
+        : 0;
       
-      // Get activity data for the current week
-      const activityData = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
-      
-      // Get previous week data for comparison
-      const prevWeekStart = format(startOfWeek(subDays(now, 7)), "yyyy-MM-dd");
-      const prevWeekEnd = format(subDays(startOfWeek(now), 1), "yyyy-MM-dd");
-      const prevWeekData = await storage.getActivity(MOCK_USER_ID, prevWeekStart, prevWeekEnd);
-      
-      // Calculate weekly change
-      const weeklyChange = activityData.average - prevWeekData.average;
-      
-      // Add step goal
+      // Goals
       const goal = 10000; // Default step goal
       
-      res.json({ ...activityData, weeklyChange, goal });
+      // Weekly progress
+      const today = new Date();
+      const weekStart = startOfWeek(today);
+      const weekEnd = endOfWeek(today);
+      
+      // Calculate steps for this week
+      const weeklySteps = data
+        .filter(entry => {
+          const entryDate = new Date(entry.date);
+          return entryDate >= weekStart && entryDate <= weekEnd;
+        })
+        .reduce((sum, entry) => sum + entry.steps, 0);
+      
+      // Weekly goal
+      const weeklyGoal = goal * 7;
+      const weeklyProgress = Math.min(100, (weeklySteps / weeklyGoal) * 100);
+      
+      res.json({
+        activity: data,
+        average: Math.round(average),
+        goal,
+        weeklySteps,
+        weeklyGoal,
+        weeklyProgress: Math.round(weeklyProgress)
+      });
     } catch (error) {
       console.error("Error fetching activity data:", error);
-      res.status(500).json({ message: "Error fetching activity data" });
+      res.status(500).json({ message: "Failed to fetch activity data" });
     }
   });
   
-  // Add activity entry
   app.post("/api/activity", async (req: Request, res: Response) => {
     try {
-      const date = format(new Date(req.body.date), "yyyy-MM-dd");
+      const { steps, date } = req.body;
+      
+      if (steps === undefined || steps < 0) {
+        return res.status(400).json({ message: "Invalid steps count. Must be non-negative." });
+      }
+      
+      const safeDate = safeParseDate(date);
       
       const activity = await storage.insertActivity({
         userId: MOCK_USER_ID,
-        steps: parseInt(req.body.steps),
-        date
+        steps,
+        date: safeDate
       });
       
-      res.status(201).json(activity);
+      // Check for new achievements
+      checkAndUpdateAchievements(MOCK_USER_ID).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      res.json({ activity });
     } catch (error) {
-      console.error("Error adding activity entry:", error);
-      res.status(500).json({ message: "Error adding activity entry" });
+      console.error("Error creating activity entry:", error);
+      res.status(500).json({ message: "Failed to create activity entry" });
     }
   });
   
-  // Get monthly activity data
   app.get("/api/activity/monthly", async (_req: Request, res: Response) => {
     try {
-      const now = new Date();
-      const startDate = format(new Date(now.getFullYear(), now.getMonth() - 2, 1), "yyyy-MM-dd");
-      const endDate = format(now, "yyyy-MM-dd");
+      // Mock monthly activity data
+      const currentMonth = new Date().getMonth();
+      const monthlyData = [];
       
-      const monthlyData = await storage.getMonthlyActivityData(MOCK_USER_ID, startDate, endDate);
+      for (let i = 0; i < 6; i++) {
+        const month = (currentMonth - i + 12) % 12;
+        monthlyData.push({
+          month,
+          average: Math.floor(Math.random() * 3000) + 5000
+        });
+      }
       
-      res.json(monthlyData);
+      res.json({ monthlyData: monthlyData.reverse() });
     } catch (error) {
       console.error("Error fetching monthly activity data:", error);
-      res.status(500).json({ message: "Error fetching monthly activity data" });
+      res.status(500).json({ message: "Failed to fetch monthly activity data" });
     }
   });
   
-  // === Journal Insights Routes ===
+  // === Insights Routes ===
   
-  // Get journal insights
   app.get("/api/journal/insights", async (_req: Request, res: Response) => {
     try {
       const insights = await storage.getJournalInsights(MOCK_USER_ID);
-      res.json(insights);
+      
+      res.json({
+        themes: insights?.themes || [],
+        correlations: insights?.correlations || []
+      });
     } catch (error) {
       console.error("Error fetching journal insights:", error);
-      res.status(500).json({ message: "Error fetching journal insights" });
+      res.status(500).json({ message: "Failed to fetch journal insights" });
     }
   });
   
   // === Tips Routes ===
   
-  // Get personalized tips
   app.get("/api/tips", async (_req: Request, res: Response) => {
     try {
-      // Get user tips from database or generate new ones
-      let tips = await storage.getTips(MOCK_USER_ID);
+      // Get recent user data for generating personalized tips
+      const recentMoods = await storage.getUserMoods(MOCK_USER_ID, 7);
+      const recentSleep = await storage.getUserSleep(MOCK_USER_ID, 7);
+      const recentActivity = await storage.getUserActivity(MOCK_USER_ID, 7);
+      const recentJournals = await storage.getJournalEntries(MOCK_USER_ID, 7);
       
-      if (tips.length === 0) {
-        // Generate initial tips
-        const initialTips = [
-          {
-            id: `tip-1-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            category: "mood",
-            title: "Practice Gratitude",
-            description: "Studies show that writing down three things you're grateful for each day can significantly boost your mood."
-          },
-          {
-            id: `tip-2-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            category: "sleep",
-            title: "Create a Sleep Routine",
-            description: "Going to bed and waking up at the same time every day helps regulate your body's internal clock."
-          },
-          {
-            id: `tip-3-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            category: "activity",
-            title: "Take Walking Breaks",
-            description: "Even short 5-minute walks throughout your day can improve energy levels and focus."
-          }
-        ];
-        
-        // Save initial tips to database
-        for (const tip of initialTips) {
-          await storage.insertTip({
-            userId: MOCK_USER_ID,
-            category: tip.category,
-            title: tip.title,
-            description: tip.description,
-            id: tip.id
-          });
-        }
-        
-        tips = initialTips;
-      }
+      // Generate personalized tips based on user data
+      const tips = ai.generatePersonalizedTips(
+        MOCK_USER_ID, 
+        recentMoods, 
+        recentSleep, 
+        recentActivity, 
+        recentJournals
+      );
       
       res.json({ tips });
     } catch (error) {
       console.error("Error fetching tips:", error);
-      res.status(500).json({ message: "Error fetching tips" });
+      res.status(500).json({ message: "Failed to fetch tips" });
     }
   });
   
   // === Achievements Routes ===
   
-  // Get user achievements
   app.get("/api/achievements", async (_req: Request, res: Response) => {
     try {
-      const achievements = await storage.getAllAchievements(MOCK_USER_ID);
-      res.json(achievements);
+      const achievements = await storage.getUserAchievements(MOCK_USER_ID);
+      res.json({ achievements });
     } catch (error) {
       console.error("Error fetching achievements:", error);
-      res.status(500).json({ message: "Error fetching achievements" });
+      res.status(500).json({ message: "Failed to fetch achievements" });
     }
   });
-
-  // Create HTTP server
+  
   const httpServer = createServer(app);
   
   return httpServer;
@@ -1036,43 +1112,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
  */
 async function updateJournalInsights(userId: number): Promise<void> {
   try {
-    // Fetch necessary data
+    // Get last 30 days of data
     const journals = await storage.getJournalEntries(userId, 30);
-    const now = new Date();
-    const startDate = format(subDays(now, 30), "yyyy-MM-dd");
-    const endDate = format(now, "yyyy-MM-dd");
+    const moods = await storage.getUserMoods(userId, 30);
+    const sleep = await storage.getUserSleep(userId, 30);
+    const activity = await storage.getUserActivity(userId, 30);
     
-    const moods = (await storage.getMoods(userId, startDate, endDate)).moods;
-    const sleep = (await storage.getSleep(userId, startDate, endDate)).sleep;
-    const activity = (await storage.getActivity(userId, startDate, endDate)).activity;
-    
-    // Extract themes from journals
+    // Extract themes from journal entries
     const themes = ai.extractJournalThemes(journals);
     
-    // Find correlations between data points
+    // Find correlations between journal content and other metrics
     const correlations = ai.findJournalCorrelations(moods, sleep, activity, journals);
     
-    // Get existing insights
-    const existingInsights = await storage.getJournalInsights(userId);
-    
-    if (existingInsights.themes.length > 0) {
-      // Update existing insights
-      await db.update(schema.journalInsights).set({
-        themes,
-        correlations,
-        // @ts-ignore
-        lastUpdated: new Date(),
-      }).where(eq(schema.journalInsights.userId, userId));
-    } else {
-      // Create new insights
-      await storage.insertJournalInsight({
-        userId,
-        themes,
-        correlations,
-        // @ts-ignore
-        lastUpdated: new Date(),
-      });
-    }
+    // Update insights in the database
+    await storage.updateJournalInsights(userId, themes, correlations);
   } catch (error) {
     console.error("Error updating journal insights:", error);
   }
@@ -1083,28 +1136,43 @@ async function updateJournalInsights(userId: number): Promise<void> {
  */
 async function checkAndUpdateAchievements(userId: number): Promise<void> {
   try {
-    // Fetch user data
-    const journals = await storage.getJournalEntries(userId, 30);
-    const now = new Date();
-    const startDate = format(subDays(now, 30), "yyyy-MM-dd");
-    const endDate = format(now, "yyyy-MM-dd");
+    // Get all user data needed for achievement checking
+    const journals = await storage.getJournalEntries(userId, 90);
+    const moods = await storage.getUserMoods(userId, 90);
+    const sleep = await storage.getUserSleep(userId, 90);
+    const activity = await storage.getUserActivity(userId, 90);
     
-    const moods = (await storage.getMoods(userId, startDate, endDate)).moods;
-    const sleep = (await storage.getSleep(userId, startDate, endDate)).sleep;
-    const activity = (await storage.getActivity(userId, startDate, endDate)).activity;
-    
-    // Check which achievements have been unlocked
+    // Check which achievements have been reached
     const achievedIds = ai.checkAchievements(moods, sleep, activity, journals);
     
-    if (achievedIds.length > 0) {
-      for (const achievementId of achievedIds) {
-        await storage.updateUserAchievement(userId, achievementId, {
-          achieved: true,
-          achievedAt: new Date()
+    for (const achievementId of achievedIds) {
+      // Check if user already has this achievement
+      const existing = await db.query.user_achievements.findFirst({
+        where: (ua) => eq(ua.userId, userId) && eq(ua.achievementId, achievementId)
+      });
+      
+      if (!existing) {
+        // Add new achievement
+        await db.insert(schema.user_achievements).values({
+          userId,
+          achievementId,
+          unlocked: true,
+          unlockedAt: new Date().toISOString()
         });
+      } else if (!existing.unlocked) {
+        // Update existing achievement to unlocked
+        await db.update(schema.user_achievements)
+          .set({ 
+            unlocked: true,
+            unlockedAt: new Date().toISOString()
+          })
+          .where(
+            eq(schema.user_achievements.userId, userId) && 
+            eq(schema.user_achievements.achievementId, achievementId)
+          );
       }
     }
   } catch (error) {
-    console.error("Error checking achievements:", error);
+    console.error("Error checking and updating achievements:", error);
   }
 }

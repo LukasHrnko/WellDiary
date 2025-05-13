@@ -12,7 +12,7 @@ interface JournalUploaderProps {
   onSuccess: (data: { journalId: number, text: string }) => void;
 }
 
-type OcrMethod = 'standard' | 'paddle' | 'webai' | 'htr' | 'enhanced-htr' | 'handwriting';
+type OcrMethod = 'standard' | 'paddle' | 'webai' | 'htr' | 'enhanced-htr' | 'handwriting' | 'trocr';
 
 const methodLabels: Record<OcrMethod, string> = {
   'standard': 'Standardní OCR (pro tištěný text)',
@@ -20,7 +20,8 @@ const methodLabels: Record<OcrMethod, string> = {
   'webai': 'WebAI OCR (optimalizováno pro digitální text)',
   'htr': 'HTR Základní (ruční text - základní)',
   'enhanced-htr': 'HTR Vylepšený (multi-průchod)',
-  'handwriting': 'Handwriting.js (specializovaná knihovna)'
+  'handwriting': 'Handwriting.js (specializovaná knihovna)',
+  'trocr': 'TrOCR (Microsoft přes Python bridge)'
 };
 
 export function JournalUploader({ onSuccess }: JournalUploaderProps) {
