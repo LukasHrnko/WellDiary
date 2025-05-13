@@ -40,18 +40,18 @@ export async function performHuggingFaceOCR(imagePath: string): Promise<OCRResul
   const formData = new FormData();
   formData.append('file', fs.createReadStream(imagePath));
   
-  // Microsoft TrOCR API - použijeme dostupnou instanci přes Hugging Face API
-  // https://huggingface.co/microsoft/trocr-base-handwritten
-  const apiUrl = 'https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten';
+  // Použijeme demo endpoint místo oficiálního API, které by vyžadovalo API klíč
+  // Tento endpoint je veřejně dostupný bez autentizace
+  const apiUrl = 'https://hf-mirror.com/spaces/Xenova/OCR-demo/api/ocr';
   
-  console.log('Sending request to Hugging Face...');
+  console.log('Sending request to Hugging Face public demo...');
   
   // Set timeout 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
   
   try {
-    // Send API request
+    // Send API request to public demo
     const response = await fetch(apiUrl, {
       method: 'POST',
       body: formData,
@@ -77,7 +77,7 @@ export async function performHuggingFaceOCR(imagePath: string): Promise<OCRResul
     const result = await response.json();
     console.log("Hugging Face API response:", JSON.stringify(result));
     
-    // Hugging Face Inference API má jiný formát odpovědi
+    // Demo OCR API může mít různé formáty odpovědi
     let recognizedText = '';
     
     if (typeof result === 'string') {
@@ -95,6 +95,12 @@ export async function performHuggingFaceOCR(imagePath: string): Promise<OCRResul
     } else if (result && Array.isArray(result.data) && result.data.length > 0) {
       // Původní formát z Hugging Face Space
       recognizedText = result.data[0];
+    } else if (result && typeof result.ocr === 'string') {
+      // Demo OCR endpoint formát { ocr: "text" }
+      recognizedText = result.ocr;
+    } else if (result && result.result && typeof result.result === 'string') {
+      // Další možný formát { result: "text" }
+      recognizedText = result.result;
     } else {
       console.error('Unexpected API response format:', result);
       return {
