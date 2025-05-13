@@ -200,6 +200,94 @@ export async function performEnhancedHTR(imagePath: string): Promise<HTRResult> 
   }
 }
 
+// Statistické n-gramy pro nejčastější kolokace v deníkových záznamech
+// Toto je jednoduchý model založený na pravděpodobnosti výskytu slov vedle sebe
+const commonBigrams: [string, string][] = [
+  ["I", "was"],
+  ["I", "am"],
+  ["I", "went"],
+  ["I", "had"],
+  ["I", "feel"],
+  ["I", "think"],
+  ["I", "saw"],
+  ["I", "met"],
+  ["I", "have"],
+  ["I", "got"],
+  ["Dear", "Diary"],
+  ["my", "friend"],
+  ["my", "mom"],
+  ["my", "dad"],
+  ["my", "parents"],
+  ["my", "sister"],
+  ["my", "brother"],
+  ["my", "teacher"],
+  ["my", "school"],
+  ["in", "the"],
+  ["at", "the"],
+  ["to", "the"],
+  ["of", "the"],
+  ["with", "my"],
+  ["for", "the"],
+  ["about", "the"],
+  ["really", "excited"],
+  ["very", "happy"],
+  ["very", "sad"],
+  ["very", "tired"],
+  ["very", "interesting"],
+  ["a", "lot"],
+  ["so", "much"],
+  ["so", "happy"],
+  ["so", "sad"],
+  ["so", "tired"],
+  ["so", "excited"],
+  ["we", "went"],
+  ["we", "had"],
+  ["this", "morning"],
+  ["today", "I"],
+  ["today", "was"],
+  ["it", "was"],
+];
+
+// Seřazené podle četnosti výskytu - založeno na typickém obsahu deníků
+const commonDiaryWords = [
+  "I", "my", "me", "today", "went", "was", "had", "have", "friend", "friends",
+  "school", "class", "teacher", "mom", "dad", "parents", "sister", "brother",
+  "morning", "day", "night", "homework", "really", "very", "good", "bad",
+  "happy", "sad", "excited", "tired", "interesting", "boring", "fun", "great",
+  "awful", "amazing", "home", "house", "room", "played", "watched", "saw",
+  "favorite", "love", "like", "hate", "think", "feel", "felt", "got", "learned",
+  "ate", "food", "lunch", "dinner", "breakfast", "time", "hours", "minutes"
+];
+
+// České statistické n-gramy
+const czechBigrams: [string, string][] = [
+  ["můj", "den"],
+  ["dnes", "jsem"],
+  ["jsem", "měl"],
+  ["jsem", "byla"],
+  ["jsem", "byl"],
+  ["ve", "škole"],
+  ["do", "školy"],
+  ["s", "kamarádem"],
+  ["s", "kamarádkou"],
+  ["moje", "mamka"],
+  ["můj", "taťka"],
+  ["mám", "radost"],
+  ["bylo", "to"],
+  ["je", "to"],
+  ["na", "výlet"],
+  ["v", "noci"],
+  ["dobrý", "den"],
+  ["milý", "deníčku"],
+];
+
+// Běžná česká slova v deníkových zápisech
+const czechDiaryWords = [
+  "deníčku", "dnes", "jsem", "byl", "byla", "bylo", "den", "škola", "školy",
+  "kamarád", "kamarádka", "mamka", "táta", "radost", "smutek", "učitel", 
+  "učitelka", "ráno", "večer", "noc", "domácí", "úkol", "práce", "výlet"
+];
+
 /**
  * Pokročilý postprocessing rozpoznaného textu pro zvýšení kvality
  * 
@@ -301,8 +389,8 @@ function postprocessHandwrittenText(text: string): string {
     .replace(/\bToday,I\b/g, "Today, I")
     .replace(/([,.!?])([a-zA-Z])/g, "$1 $2"); // mezera po interpunkci
 
-  // Oprava problematických slov
-  const commonDiaryWords: Record<string, string> = {
+  // Oprava problematických slov pomocí regulárních výrazů
+  const regexCorrections: Record<string, string> = {
     'schoo[1Il]': 'school',
     'teache[rn]': 'teacher',
     'c[1Il]ass': 'class',
@@ -312,10 +400,14 @@ function postprocessHandwrittenText(text: string): string {
     'fr[1Il]end': 'friend',
   };
 
-  // Aplikujeme opravy běžných slov
-  Object.entries(commonDiaryWords).forEach(([pattern, replacement]) => {
-    const regex = new RegExp(`\\b${pattern}\\b`, 'gi');
-    result = result.replace(regex, replacement);
+  // Aplikujeme opravy běžných slov s regex
+  Object.entries(regexCorrections).forEach(([pattern, replacement]) => {
+    try {
+      const regex = new RegExp(`\\b${pattern}\\b`, 'gi');
+      result = result.replace(regex, replacement);
+    } catch (error) {
+      console.error('Error with regex pattern:', pattern, error);
+    }
   });
   
   // Specifické opravy pro české texty
@@ -332,8 +424,201 @@ function postprocessHandwrittenText(text: string): string {
     .replace(/\bpritel\b/g, "přítel")
     .replace(/\bpritelkyne\b/g, "přítelkyně")
     .replace(/\bprijemny\b/g, "příjemný");
+    
+  // Aplikujeme kontextové opravy
+  result = applyContextualCorrections(result);
   
   return result;
+}
+
+/**
+ * Aplikuje kontextové korekce textu na základě statistického modelu
+ * Používá N-gramy (bigramy) pro opravu textu na základě kontextu
+ * 
+ * @param text Text k opravě
+ * @returns Opravený text s kontextovými korekcemi
+ */
+function applyContextualCorrections(text: string): string {
+  // Rozdělíme text na věty
+  const sentences = text.split(/[.!?]+\s+/).filter(s => s.trim().length > 0);
+  let correctedSentences: string[] = [];
+  
+  // Pro každou větu
+  for (let sentence of sentences) {
+    // Rozdělíme na slova
+    let words = sentence.split(/\s+/);
+    
+    // Pro každé slovo (kromě posledního) kontrolujeme bigramy
+    for (let i = 0; i < words.length - 1; i++) {
+      const currentWord = words[i];
+      const nextWord = words[i + 1];
+      
+      // Zkontrolujeme, zda existuje přesnější bigram
+      const possibleBigram = findPossibleBigram(currentWord, nextWord);
+      
+      // Pokud jsme našli lepší bigram, aplikujeme ho
+      if (possibleBigram) {
+        words[i] = possibleBigram[0];
+        words[i + 1] = possibleBigram[1];
+      }
+    }
+    
+    // Pro každé slovo zkontrolujeme, zda existuje blízká podoba v seznamu běžných slov
+    for (let i = 0; i < words.length; i++) {
+      // Pokud je slovo krátké nebo obsahuje čísla, přeskočíme ho
+      if (words[i].length < 3 || /\d/.test(words[i])) continue;
+      
+      // Navrhneme opravu běžných slov
+      const suggestion = findSimilarCommonWord(words[i]);
+      if (suggestion) {
+        words[i] = suggestion;
+      }
+    }
+    
+    correctedSentences.push(words.join(' '));
+  }
+  
+  // Spojíme věty zpět s interpunkcí
+  return correctedSentences.join('. ').replace(/\.\s+\./g, '.') + '.';
+}
+
+/**
+ * Hledá podobný běžný bigram na základě aktuálních dvou slov
+ * Používá Levensteinovu vzdálenost pro měření podobnosti slov
+ * 
+ * @param word1 První slovo
+ * @param word2 Druhé slovo
+ * @returns Nalezený bigram nebo null
+ */
+function findPossibleBigram(word1: string, word2: string): [string, string] | null {
+  // Pokud jsou obě slova krátká, přeskočíme
+  if (word1.length < 2 || word2.length < 2) return null;
+  
+  // Normalizujeme slova pro porovnání
+  const normalizedWord1 = word1.toLowerCase().trim();
+  const normalizedWord2 = word2.toLowerCase().trim();
+  
+  // Vybíráme kolekci bigramů podle jazyka - detekce češtiny
+  const isCzech = /[áčďéěíňóřšťúůýž]/i.test(word1 + word2);
+  const bigrams = isCzech ? czechBigrams : commonBigrams;
+  
+  // Projdeme všechny bigramy a hledáme podobný
+  for (const [first, second] of bigrams) {
+    // Kontrolujeme, zda jsou slova podobná pomocí Levenshteinovy vzdálenosti
+    if (
+      (levenshteinDistance(normalizedWord1, first.toLowerCase()) <= 2 && 
+       levenshteinDistance(normalizedWord2, second.toLowerCase()) <= 2) ||
+      // Pro kratší slova snížíme toleranci
+      (normalizedWord1.length <= 3 && 
+       normalizedWord1[0] === first.toLowerCase()[0] && 
+       normalizedWord2 === second.toLowerCase())
+    ) {
+      // Zachováme původní kapitalizaci prvního slova
+      let correctedFirst = first;
+      if (/^[A-Z]/.test(word1)) {
+        correctedFirst = first.charAt(0).toUpperCase() + first.slice(1);
+      }
+      
+      return [correctedFirst, second];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Hledá podobné běžné slovo na základě vstupního slova
+ * Používá Levensteinovu vzdálenost pro měření podobnosti slov
+ * 
+ * @param word Vstupní slovo
+ * @returns Nalezené podobné slovo nebo null
+ */
+function findSimilarCommonWord(word: string): string | null {
+  // Normalizujeme slovo pro porovnání
+  const normalizedWord = word.toLowerCase().trim();
+  
+  // Vybíráme kolekci slov podle jazyka - detekce češtiny
+  const isCzech = /[áčďéěíňóřšťúůýž]/i.test(word);
+  const wordList = isCzech ? czechDiaryWords : commonDiaryWords;
+  
+  // Nejlepší nalezený výsledek
+  let bestMatch = null;
+  let minDistance = Infinity;
+  
+  // Projdeme seznam běžných slov
+  for (const commonWord of wordList) {
+    // Pro krátká slova použijeme přesnou shodu prvního písmene
+    if (normalizedWord.length <= 3) {
+      if (normalizedWord[0] === commonWord.toLowerCase()[0] && 
+          levenshteinDistance(normalizedWord, commonWord.toLowerCase()) === 1) {
+        // Zachováme původní kapitalizaci
+        if (/^[A-Z]/.test(word)) {
+          return commonWord.charAt(0).toUpperCase() + commonWord.slice(1);
+        }
+        return commonWord;
+      }
+    } else {
+      // Pro delší slova použijeme Levenshteinovu vzdálenost
+      const distance = levenshteinDistance(normalizedWord, commonWord.toLowerCase());
+      
+      // Pouze pokud je vzdálenost dostatečně malá a menší než dosavadní minimum
+      const similarityThreshold = Math.min(2, Math.floor(normalizedWord.length / 3));
+      if (distance <= similarityThreshold && distance < minDistance) {
+        minDistance = distance;
+        bestMatch = commonWord;
+      }
+    }
+  }
+  
+  // Pokud jsme našli shodu, zachováme původní kapitalizaci
+  if (bestMatch) {
+    if (/^[A-Z]/.test(word)) {
+      return bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
+    }
+    return bestMatch;
+  }
+  
+  return null;
+}
+
+/**
+ * Vypočítá Levenshteinovu vzdálenost mezi dvěma řetězci
+ * 
+ * @param a První řetězec
+ * @param b Druhý řetězec
+ * @returns Levenshteinova vzdálenost
+ */
+function levenshteinDistance(a: string, b: string): number {
+  // Pokud je některý ze vstupů prázdný, vrátíme délku druhého
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  
+  // Vytvoříme matici vzdáleností
+  const matrix: number[][] = [];
+  
+  // Inicializace první řady
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  // Inicializace prvního sloupce
+  for (let i = 0; i <= a.length; i++) {
+    matrix[0][i] = i;
+  }
+  
+  // Výpočet vzdálenosti
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1, // odstranění
+        matrix[i][j - 1] + 1, // vložení
+        matrix[i - 1][j - 1] + cost // náhrada nebo žádná změna
+      );
+    }
+  }
+  
+  return matrix[b.length][a.length];
 }
 
 /**
