@@ -7,6 +7,7 @@ import * as ocr from "./ocr";
 import * as paddleocr from "./paddleocr";
 import * as webaiocr from "./webai-ocr";
 import * as ai from "./ai";
+import { registerHuggingFaceRoutes } from "./routes-huggingface";
 import * as htr from "./enhanced-htr";
 import * as huggingFaceOcr from "./huggingface-ocr";
 import * as handwritingRecognition from "./handwriting-recognition";
@@ -54,6 +55,9 @@ import { setupAuth } from "./auth";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   setupAuth(app);
+  
+  // Register Hugging Face OCR routes
+  registerHuggingFaceRoutes(app);
   // === Health Check ===
   app.get("/api/health", (_req: Request, res: Response) => {
     res.status(200).json({ status: "healthy" });
