@@ -216,11 +216,8 @@ def preprocess_image(image_path, variant=0):
         
     except Exception as e:
         print(f"Chyba při předzpracování obrazu (varianta {variant}): {str(e)}")
-        # V případě chyby vrátíme původní obrázek ve stupních šedi nebo prázdný obrázek
-        try:
-            return gray
-        except:
-            return np.zeros((100, 100), dtype=np.uint8)
+        # V případě chyby vrátíme prázdný obrázek
+        return np.zeros((100, 100), dtype=np.uint8)
 
 def process_image_variant(args):
     """
