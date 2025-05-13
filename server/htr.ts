@@ -8,8 +8,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-// Použijeme standardní import, který funguje s knihovnou Jimp
-const Jimp = require('jimp');
+// Import knihovny Jimp pro zpracování obrazu
+import Jimp from 'jimp';
 import { createWorker, PSM } from 'tesseract.js';
 import { readFile } from 'fs/promises';
 
