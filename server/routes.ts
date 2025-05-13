@@ -863,7 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Process image with Web AI Toolkit OCR
-      const ocrResult = await webaiocr.performWebAIOCR(imagePath);
+      const ocrResult = await webaiocr.performWebAiOCR(imagePath);
       
       if (!ocrResult.success) {
         webaiocr.cleanupImage(imagePath);
