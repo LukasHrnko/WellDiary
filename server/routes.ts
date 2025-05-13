@@ -1381,12 +1381,12 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
       
       if (!existing) {
         // Add new achievement
-        await db.insert(schema.userAchievements).values({
+        await db.insert(schema.userAchievements).values([{
           userId,
           achievementId,
           unlocked: true,
           unlockedAt: new Date().toISOString()
-        });
+        }]);
       } else if (!existing.unlocked) {
         // Update existing achievement to unlocked
         await db.update(schema.userAchievements)
