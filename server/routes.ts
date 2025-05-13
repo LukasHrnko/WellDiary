@@ -58,9 +58,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === Journal Routes ===
   
-  app.get("/api/journal/entries", async (_req: Request, res: Response) => {
+  app.get("/api/journal/entries", async (req: Request, res: Response) => {
     try {
-      const entries = await storage.getJournalEntries(MOCK_USER_ID, 90);
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
+      const userId = req.user.id;
+      const entries = await storage.getJournalEntries(userId, 90);
       res.json({ entries });
     } catch (error) {
       console.error("Error fetching journal entries:", error);
@@ -68,9 +73,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/journal/last-upload", async (_req: Request, res: Response) => {
+  app.get("/api/journal/last-upload", async (req: Request, res: Response) => {
     try {
-      const lastEntry = await storage.getLastJournalEntry(MOCK_USER_ID);
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
+      const userId = req.user.id;
+      
+      // Zde by měla být funkce getLastJournalEntry, ale dle chyby neexistuje
+      // Použijeme náhradní řešení pro získání posledního záznamu
+      const entries = await storage.getJournalEntries(userId, 1);
+      const lastEntry = entries && entries.length > 0 ? entries[0] : null;
+      
       res.json({ lastEntry });
     } catch (error) {
       console.error("Error fetching last journal entry:", error);
