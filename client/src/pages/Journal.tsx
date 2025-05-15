@@ -25,6 +25,7 @@ interface JournalEntry {
 
 const Journal: React.FC = () => {
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [filterDate, setFilterDate] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [mood, setMood] = useState(70);
   const [sleep, setSleep] = useState(7.5);
@@ -36,7 +37,13 @@ const Journal: React.FC = () => {
     queryKey: ['/api/journal/entries'],
   });
   
-  const entries = data?.entries || [];
+  // Filtrovat záznamy podle vybraného data pokud je nastaveno
+  const entries = React.useMemo(() => {
+    const allEntries = data?.entries || [];
+    if (!filterDate) return allEntries;
+    
+    return allEntries.filter(entry => entry.date.startsWith(filterDate));
+  }, [data, filterDate]);
   
   // Add new journal entry mutation
   const addEntryMutation = useMutation({
@@ -120,15 +127,38 @@ const Journal: React.FC = () => {
         <TabsContent value="entries">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="md:col-span-1">
-              <JournalCalendar 
-                onSelectDate={(date) => {
-                  setDate(format(date, "yyyy-MM-dd"));
-                  const tabsList = document.querySelector('[data-value="new"]');
-                  if (tabsList) {
-                    (tabsList as HTMLElement).click();
-                  }
-                }}
-              />
+              <div>
+                <JournalCalendar 
+                  onSelectDate={(date) => {
+                    const formattedDate = format(date, "yyyy-MM-dd");
+                    // Nastavení filtrovacího data
+                    setFilterDate(formattedDate);
+                    
+                    // Kontrola, zda existuje záznam pro tento den
+                    const entriesForDate = data?.entries?.filter(entry => entry.date.startsWith(formattedDate)) || [];
+                    
+                    // Pokud neexistuje žádný záznam, přejdeme na vytvoření nového záznamu
+                    if (entriesForDate.length === 0) {
+                      setDate(formattedDate);
+                      const tabsList = document.querySelector('[data-value="new"]');
+                      if (tabsList) {
+                        (tabsList as HTMLElement).click();
+                      }
+                    }
+                  }}
+                />
+                {filterDate && (
+                  <div className="flex justify-center mt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setFilterDate(null)}
+                    >
+                      Zobrazit všechny záznamy
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="md:col-span-2">
               {isLoading ? (

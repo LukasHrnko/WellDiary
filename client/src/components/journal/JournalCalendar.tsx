@@ -104,12 +104,12 @@ export default function JournalCalendar({ onSelectDate }: JournalCalendarProps) 
             mode="single"
             selected={selectedDay}
             onSelect={handleDayClick}
-            modifiers={{ hasEntry: daysWithEntries.map(d => d.date) }}
-            modifiersClassNames={{
-              ...daysWithEntries.reduce((acc, day) => ({
-                ...acc,
-                [format(day.date, 'yyyy-MM-dd')]: day.className
-              }), {})
+            modifiers={{
+              'high-mood': daysWithEntries.filter(d => d.className.includes('high-mood')).map(d => d.date),
+              'good-mood': daysWithEntries.filter(d => d.className.includes('good-mood')).map(d => d.date),
+              'neutral-mood': daysWithEntries.filter(d => d.className.includes('neutral-mood')).map(d => d.date),
+              'low-mood': daysWithEntries.filter(d => d.className.includes('low-mood')).map(d => d.date),
+              'very-low-mood': daysWithEntries.filter(d => d.className.includes('very-low-mood')).map(d => d.date)
             }}
             locale={cs}
             showOutsideDays

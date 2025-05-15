@@ -3,7 +3,12 @@
 }
 
 /* Základní styl pro tečky označující deníkové záznamy */
-.journal-calendar .rdp-day.hasEntry::after {
+.journal-calendar .rdp-day[aria-selected=true]::after,
+.journal-calendar .rdp-day.high-mood::after,
+.journal-calendar .rdp-day.good-mood::after,
+.journal-calendar .rdp-day.neutral-mood::after,
+.journal-calendar .rdp-day.low-mood::after,
+.journal-calendar .rdp-day.very-low-mood::after {
   content: "";
   position: absolute;
   bottom: 2px;
