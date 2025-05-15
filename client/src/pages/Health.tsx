@@ -145,8 +145,8 @@ const Health: React.FC = () => {
                     </div>
                   </div>
                   <ProgressCircle 
-                    percentage={moodData?.average || 0} 
-                    value={`${moodData?.average || 0}%`}
+                    percentage={moodData?.monthlyData?.average || 0} 
+                    value={`${moodData?.monthlyData?.average || 0}%`}
                     color="#FACC15"
                     size={60}
                     strokeWidth={6}
@@ -159,7 +159,7 @@ const Health: React.FC = () => {
                     </div>
                   ) : (
                     <BarChart 
-                      data={moodData?.moods ? moodData.moods.slice(-7) : []} 
+                      data={moodData?.monthlyData?.moods ? moodData.monthlyData.moods.slice(-7) : []} 
                       barKey="value" 
                       height={80}
                       color="#FACC15"

@@ -880,7 +880,8 @@ async function checkAndUpdateAchievements(userId: number): Promise<void> {
         await db.insert(userAchievements).values({
           userId,
           achievementId,
-          achievedAt: new Date()
+          unlocked: true,
+          unlockedAt: new Date().toISOString()
         });
       }
     }
