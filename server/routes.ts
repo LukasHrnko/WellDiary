@@ -741,21 +741,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === Tips and Achievements Routes ===
   
-  app.get("/api/tips", async (_req: Request, res: Response) => {
+  app.get("/api/tips", async (req: Request, res: Response) => {
     try {
       // Get recent user data
       const today = new Date();
       const startDate = format(subDays(today, 30), 'yyyy-MM-dd'); // last 30 days
       const endDate = format(today, 'yyyy-MM-dd');
       
-      const moodsData = await storage.getMoods(MOCK_USER_ID, startDate, endDate);
-      const sleepData = await storage.getSleep(MOCK_USER_ID, startDate, endDate);
-      const activityData = await storage.getActivity(MOCK_USER_ID, startDate, endDate);
-      const journals = await storage.getJournalEntries(MOCK_USER_ID, 30);
+      // Use user ID if authenticated, otherwise fall back to MOCK_USER_ID
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
+      const moodsData = await storage.getMoods(userId, startDate, endDate);
+      const sleepData = await storage.getSleep(userId, startDate, endDate);
+      const activityData = await storage.getActivity(userId, startDate, endDate);
+      const journals = await storage.getJournalEntries(userId, 30);
       
       // Generate personalized tips
       const tips = ai.generatePersonalizedTips(
-        MOCK_USER_ID,
+        userId,
         moodsData.moods,
         sleepData.sleep,
         activityData.activity,
@@ -769,14 +772,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/achievements", async (_req: Request, res: Response) => {
+  app.get("/api/achievements", async (req: Request, res: Response) => {
     try {
+      // Use user ID if authenticated, otherwise fall back to MOCK_USER_ID
+      const userId = req.isAuthenticated() ? req.user.id : MOCK_USER_ID;
+      
       // Get user achievements
-      const achievements = await db.query.userAchievements.findMany({
-        where: eq(userAchievements.userId, MOCK_USER_ID)
+      const userAchievementsData = await db.query.userAchievements.findMany({
+        where: eq(userAchievements.userId, userId)
       });
       
-      res.json({ achievements });
+      // Get all possible achievements
+      const allAchievements = await db.query.achievements.findMany();
+      
+      // Map user achievements to include all needed data
+      const achievements = allAchievements.map(achievement => {
+        const userAchievement = userAchievementsData.find(ua => ua.achievementId === achievement.id);
+        
+        return {
+          id: achievement.id,
+          title: achievement.title,
+          description: achievement.description,
+          category: achievement.category,
+          icon: achievement.icon,
+          goal: achievement.goal,
+          unlocked: userAchievement?.unlocked || false,
+          unlockedAt: userAchievement?.unlockedAt || null,
+          progress: userAchievement?.progress || 0
+        };
+      });
+      
+      // Get unique categories
+      const categoriesSet = new Set<string>();
+      allAchievements.forEach(a => {
+        if (a.category) categoriesSet.add(a.category);
+      });
+      const categories = Array.from(categoriesSet);
+      
+      res.json({ achievements, categories });
     } catch (error) {
       console.error("Error fetching achievements:", error);
       res.status(500).json({ message: "Failed to fetch achievements" });

@@ -225,7 +225,8 @@ export const journalInsightsRelations = relations(journalInsights, ({ one }) => 
 }));
 
 export const userAchievementsRelations = relations(userAchievements, ({ one }) => ({
-  user: one(users, { fields: [userAchievements.userId], references: [users.id] })
+  user: one(users, { fields: [userAchievements.userId], references: [users.id] }),
+  achievement: one(achievements, { fields: [userAchievements.achievementId], references: [achievements.id] })
 }));
 
 export const achievementsRelations = relations(achievements, ({ many }) => ({
