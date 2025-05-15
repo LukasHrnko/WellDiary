@@ -1,0 +1,66 @@
+.journal-calendar .rdp-day {
+  position: relative;
+}
+
+/* Základní styl pro tečky označující deníkové záznamy */
+.journal-calendar .rdp-day.hasEntry::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--primary);
+}
+
+/* Různé barvy teček podle nálady */
+.journal-calendar .high-mood::after {
+  background-color: #4ade80 !important; /* zelená pro dobrou náladu */
+}
+
+.journal-calendar .good-mood::after {
+  background-color: #a3e635 !important; /* světle zelená pro lehce nadprůměrnou náladu */
+}
+
+.journal-calendar .neutral-mood::after {
+  background-color: #facc15 !important; /* žlutá pro neutrální náladu */
+}
+
+.journal-calendar .low-mood::after {
+  background-color: #fb923c !important; /* oranžová pro sníženou náladu */
+}
+
+.journal-calendar .very-low-mood::after {
+  background-color: #f87171 !important; /* červená pro špatnou náladu */
+}
+
+/* Zvýraznění dnešního dne */
+.journal-calendar .rdp-day_today:not(.rdp-day_outside) {
+  background-color: rgba(var(--primary), 0.1);
+  font-weight: bold;
+}
+
+/* Zvýraznění vybraného dne */
+.journal-calendar .rdp-day_selected:not(.rdp-day_outside):not(.rdp-day_disabled) {
+  background-color: var(--primary);
+  color: white;
+}
+
+/* Styl pro dny mimo aktuální měsíc */
+.journal-calendar .rdp-day_outside {
+  opacity: 0.5;
+}
+
+/* Responzivní velikost pro mobily */
+@media (max-width: 640px) {
+  .journal-calendar .rdp-month {
+    width: 100%;
+  }
+  
+  .journal-calendar .rdp-day {
+    width: 32px;
+    height: 32px;
+  }
+}
