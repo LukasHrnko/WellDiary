@@ -6,19 +6,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { format, subMonths } from "date-fns";
 
+interface MonthlyResponse<T> {
+  monthlyData: {
+    sleep?: T[],
+    moods?: T[],
+    activity?: T[],
+    average: number,
+    goalPercentage: number,
+    goal: number,
+    bestDay?: string,
+    stability?: number,
+    consistency?: number,
+    optimalNights?: number,
+    activeDays?: number,
+    caloriesBurned?: number,
+    qualityScore?: number,
+    goodDays?: number
+  }
+}
+
 const Health: React.FC = () => {
   const startDate = format(subMonths(new Date(), 1), "yyyy-MM-dd");
   const endDate = format(new Date(), "yyyy-MM-dd");
   
-  const { data: sleepData, isLoading: loadingSleep } = useQuery({
+  const { data: sleepData, isLoading: loadingSleep } = useQuery<MonthlyResponse<any>>({
     queryKey: ['/api/sleep/monthly', startDate, endDate],
   });
   
-  const { data: activityData, isLoading: loadingActivity } = useQuery({
+  const { data: activityData, isLoading: loadingActivity } = useQuery<MonthlyResponse<any>>({
     queryKey: ['/api/activity/monthly', startDate, endDate],
   });
   
-  const { data: moodData, isLoading: loadingMood } = useQuery({
+  const { data: moodData, isLoading: loadingMood } = useQuery<MonthlyResponse<any>>({
     queryKey: ['/api/mood/monthly', startDate, endDate],
   });
   
@@ -49,8 +68,8 @@ const Health: React.FC = () => {
                     </div>
                   </div>
                   <ProgressCircle 
-                    percentage={sleepData?.goalPercentage || 0} 
-                    value={`${sleepData?.average?.toFixed(1) || 0}h`}
+                    percentage={sleepData?.monthlyData?.goalPercentage || 0} 
+                    value={`${sleepData?.monthlyData?.average?.toFixed(1) || 0}h`}
                     color="#4AAED9"
                     size={60}
                     strokeWidth={6}
@@ -63,7 +82,7 @@ const Health: React.FC = () => {
                     </div>
                   ) : (
                     <BarChart 
-                      data={sleepData?.sleep ? sleepData.sleep.slice(-7) : []} 
+                      data={sleepData?.monthlyData?.sleep ? sleepData.monthlyData.sleep.slice(-7) : []} 
                       barKey="hours" 
                       height={80}
                       color="#4AAED9"
@@ -87,8 +106,8 @@ const Health: React.FC = () => {
                     </div>
                   </div>
                   <ProgressCircle 
-                    percentage={activityData?.goalPercentage || 0} 
-                    value={activityData?.average?.toLocaleString() || 0}
+                    percentage={activityData?.monthlyData?.goalPercentage || 0} 
+                    value={activityData?.monthlyData?.average?.toLocaleString() || 0}
                     label="steps"
                     color="#4ADE80"
                     size={60}
@@ -102,7 +121,7 @@ const Health: React.FC = () => {
                     </div>
                   ) : (
                     <AreaChart 
-                      data={activityData?.activity ? activityData.activity.slice(-7) : []} 
+                      data={activityData?.monthlyData?.activity ? activityData.monthlyData.activity.slice(-7) : []} 
                       areaKey="steps" 
                       height={80}
                       color="#4ADE80"
