@@ -47,17 +47,23 @@ export default function JournalCalendar({ onSelectDate }: JournalCalendarProps) 
   // Vytvoření pole pro označené dny
   const daysWithEntries = Object.keys(entriesByDate).map(dateStr => {
     const entries = entriesByDate[dateStr];
-    const moodSum = entries.reduce((sum, entry) => 
-      sum + (entry.mood || 0), 0);
-    const avgMood = entries.length > 0 ? moodSum / entries.length : 0;
     
-    // Určení barvy podle nálady
+    // Určení barvy podle počtu záznamů a data
     let className = 'journal-day';
-    if (avgMood >= 80) className += ' high-mood';
-    else if (avgMood >= 60) className += ' good-mood';
-    else if (avgMood >= 40) className += ' neutral-mood';
-    else if (avgMood >= 20) className += ' low-mood';
-    else className += ' very-low-mood';
+    
+    // Počet záznamů v daný den určuje barvu
+    if (entries.length >= 3) className += ' high-mood';
+    else if (entries.length === 2) className += ' good-mood';
+    else if (entries.length === 1) {
+      // Pro jeden záznam použijeme barvu podle stáří záznamu
+      const entryDate = new Date(entries[0].createdAt);
+      const now = new Date();
+      const daysDiff = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff < 7) className += ' neutral-mood'; // poslední týden
+      else if (daysDiff < 30) className += ' low-mood'; // poslední měsíc
+      else className += ' very-low-mood'; // starší záznamy
+    }
     
     return {
       date: new Date(dateStr),
