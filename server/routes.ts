@@ -93,7 +93,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Endpoint pro aktualizaci detailů deníkového záznamu
   app.post("/api/journal/entry", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Uživatel není přihlášen" });
+      }
+      
+      const { journalId, moodValue, sleepHours, steps } = req.body;
+      
+      if (!journalId) {
+        return res.status(400).json({ message: "Chybí ID deníkového záznamu" });
+      }
+      
+      // Získat deníkový záznam
+      const entries = await storage.getJournalEntries(req.user.id);
+      const journal = entries.find(entry => entry.id === journalId);
+      
+      if (!journal) {
+        return res.status(404).json({ message: "Deníkový záznam nenalezen" });
+      }
+      
+      if (journal.userId !== req.user.id) {
+        return res.status(403).json({ message: "Nemáte oprávnění k tomuto záznamu" });
+      }
+      
+      // Uložit metadata
+      if (sleepHours !== undefined) {
+        try {
+          await storage.insertSleep({
+            userId: req.user.id,
+            hours: sleepHours,
+            date: journal.date
+          });
+        } catch (err) {
+          console.error("Nepodařilo se uložit data o spánku:", err);
+        }
+      }
+      
+      if (moodValue !== undefined) {
+        try {
+          await storage.insertMood({
+            userId: req.user.id,
+            value: moodValue,
+            date: journal.date
+          });
+        } catch (err) {
+          console.error("Nepodařilo se uložit data o náladě:", err);
+        }
+      }
+      
+      if (steps !== undefined) {
+        try {
+          await storage.insertActivity({
+            userId: req.user.id,
+            steps: steps,
+            date: journal.date
+          });
+        } catch (err) {
+          console.error("Nepodařilo se uložit data o aktivitě:", err);
+        }
+      }
+      
+      // Aktualizovat analýzy a insighty
+      updateJournalInsights(req.user.id).catch(err => {
+        console.error("Nepodařilo se aktualizovat insighty:", err);
+      });
+      
+      // Check for new achievements
+      checkAndUpdateAchievements(req.user.id).catch(err => 
+        console.error("Failed to check achievements:", err)
+      );
+      
+      res.json({ 
+        success: true, 
+        journal,
+        message: "Deníkový záznam byl úspěšně aktualizován" 
+      });
+    } catch (error) {
+      console.error('Chyba při aktualizaci deníkového záznamu:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Neočekávaná chyba při aktualizaci deníkového záznamu"
+      });
+    }
+  });
+  
+  app.post("/api/journal/create", async (req: Request, res: Response) => {
     try {
       const { content, date, imageUrl } = req.body;
       
