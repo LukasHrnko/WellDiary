@@ -3,12 +3,11 @@
 }
 
 /* Základní styl pro tečky označující deníkové záznamy */
-.journal-calendar .rdp-day[aria-selected=true]::after,
-.journal-calendar .rdp-day.high-mood::after,
-.journal-calendar .rdp-day.good-mood::after,
-.journal-calendar .rdp-day.neutral-mood::after,
-.journal-calendar .rdp-day.low-mood::after,
-.journal-calendar .rdp-day.very-low-mood::after {
+.journal-calendar .rdp-day_modifier_high-mood::after,
+.journal-calendar .rdp-day_modifier_good-mood::after,
+.journal-calendar .rdp-day_modifier_neutral-mood::after,
+.journal-calendar .rdp-day_modifier_low-mood::after,
+.journal-calendar .rdp-day_modifier_very-low-mood::after {
   content: "";
   position: absolute;
   bottom: 2px;
@@ -17,27 +16,26 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--primary);
 }
 
 /* Různé barvy teček podle nálady */
-.journal-calendar .high-mood::after {
+.journal-calendar .rdp-day_modifier_high-mood::after {
   background-color: #4ade80 !important; /* zelená pro dobrou náladu */
 }
 
-.journal-calendar .good-mood::after {
+.journal-calendar .rdp-day_modifier_good-mood::after {
   background-color: #a3e635 !important; /* světle zelená pro lehce nadprůměrnou náladu */
 }
 
-.journal-calendar .neutral-mood::after {
+.journal-calendar .rdp-day_modifier_neutral-mood::after {
   background-color: #facc15 !important; /* žlutá pro neutrální náladu */
 }
 
-.journal-calendar .low-mood::after {
+.journal-calendar .rdp-day_modifier_low-mood::after {
   background-color: #fb923c !important; /* oranžová pro sníženou náladu */
 }
 
-.journal-calendar .very-low-mood::after {
+.journal-calendar .rdp-day_modifier_very-low-mood::after {
   background-color: #f87171 !important; /* červená pro špatnou náladu */
 }
 

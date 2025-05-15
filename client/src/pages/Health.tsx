@@ -63,7 +63,7 @@ const Health: React.FC = () => {
                     </div>
                   ) : (
                     <BarChart 
-                      data={sleepData?.sleep.slice(-7) || []} 
+                      data={sleepData?.sleep ? sleepData.sleep.slice(-7) : []} 
                       barKey="hours" 
                       height={80}
                       color="#4AAED9"
@@ -102,7 +102,7 @@ const Health: React.FC = () => {
                     </div>
                   ) : (
                     <AreaChart 
-                      data={activityData?.activity.slice(-7) || []} 
+                      data={activityData?.activity ? activityData.activity.slice(-7) : []} 
                       areaKey="steps" 
                       height={80}
                       color="#4ADE80"
@@ -140,7 +140,7 @@ const Health: React.FC = () => {
                     </div>
                   ) : (
                     <BarChart 
-                      data={moodData?.moods.slice(-7) || []} 
+                      data={moodData?.moods ? moodData.moods.slice(-7) : []} 
                       barKey="value" 
                       height={80}
                       color="#FACC15"
@@ -164,7 +164,7 @@ const Health: React.FC = () => {
                   </div>
                 ) : (
                   <AreaChart 
-                    data={moodData?.moods || []} 
+                    data={moodData?.moods ? moodData.moods : []} 
                     areaKey="value" 
                     height={256}
                     showGrid
