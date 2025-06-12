@@ -2,12 +2,17 @@
   position: relative;
 }
 
-/* Základní styl pro tečky označující deníkové záznamy */
-.journal-calendar .rdp-day_modifier_high-mood::after,
-.journal-calendar .rdp-day_modifier_good-mood::after,
-.journal-calendar .rdp-day_modifier_neutral-mood::after,
-.journal-calendar .rdp-day_modifier_low-mood::after,
-.journal-calendar .rdp-day_modifier_very-low-mood::after {
+/* Základní styl pro dny se záznamy */
+.journal-calendar .rdp-day_modifier_has-entry {
+  background-color: #e0f2fe !important; /* světle modrá pro dny se záznamy */
+  border: 2px solid #0ea5e9 !important; /* modrý okraj */
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  color: #0369a1 !important;
+}
+
+/* Tečka pro označení dnů se záznamy */
+.journal-calendar .rdp-day_modifier_has-entry::after {
   content: "";
   position: absolute;
   bottom: 2px;
@@ -16,27 +21,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-}
-
-/* Různé barvy teček podle nálady */
-.journal-calendar .rdp-day_modifier_high-mood::after {
-  background-color: #4ade80 !important; /* zelená pro dobrou náladu */
-}
-
-.journal-calendar .rdp-day_modifier_good-mood::after {
-  background-color: #a3e635 !important; /* světle zelená pro lehce nadprůměrnou náladu */
-}
-
-.journal-calendar .rdp-day_modifier_neutral-mood::after {
-  background-color: #facc15 !important; /* žlutá pro neutrální náladu */
-}
-
-.journal-calendar .rdp-day_modifier_low-mood::after {
-  background-color: #fb923c !important; /* oranžová pro sníženou náladu */
-}
-
-.journal-calendar .rdp-day_modifier_very-low-mood::after {
-  background-color: #f87171 !important; /* červená pro špatnou náladu */
+  background-color: #0ea5e9 !important; /* modrá tečka */
 }
 
 /* Zvýraznění dnešního dne */

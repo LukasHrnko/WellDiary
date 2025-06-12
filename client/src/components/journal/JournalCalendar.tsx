@@ -44,32 +44,8 @@ export default function JournalCalendar({ onSelectDate }: JournalCalendarProps) 
     }
   }, [entries]);
   
-  // Vytvoření pole pro označené dny
-  const daysWithEntries = Object.keys(entriesByDate).map(dateStr => {
-    const entries = entriesByDate[dateStr];
-    
-    // Určení barvy podle počtu záznamů a data
-    let className = 'journal-day';
-    
-    // Počet záznamů v daný den určuje barvu
-    if (entries.length >= 3) className += ' high-mood';
-    else if (entries.length === 2) className += ' good-mood';
-    else if (entries.length === 1) {
-      // Pro jeden záznam použijeme barvu podle stáří záznamu
-      const entryDate = new Date(entries[0].createdAt);
-      const now = new Date();
-      const daysDiff = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (daysDiff < 7) className += ' neutral-mood'; // poslední týden
-      else if (daysDiff < 30) className += ' low-mood'; // poslední měsíc
-      else className += ' very-low-mood'; // starší záznamy
-    }
-    
-    return {
-      date: new Date(dateStr),
-      className
-    };
-  });
+  // Vytvoření pole dnů se záznamy
+  const daysWithEntries = Object.keys(entriesByDate).map(dateStr => new Date(dateStr));
   
   // Funkce pro zpracování výběru dne
   const handleDayClick = (day: Date | undefined) => {
@@ -105,11 +81,7 @@ export default function JournalCalendar({ onSelectDate }: JournalCalendarProps) 
             selected={selectedDay}
             onSelect={handleDayClick}
             modifiers={{
-              'high-mood': daysWithEntries.filter(d => d.className.includes('high-mood')).map(d => d.date),
-              'good-mood': daysWithEntries.filter(d => d.className.includes('good-mood')).map(d => d.date),
-              'neutral-mood': daysWithEntries.filter(d => d.className.includes('neutral-mood')).map(d => d.date),
-              'low-mood': daysWithEntries.filter(d => d.className.includes('low-mood')).map(d => d.date),
-              'very-low-mood': daysWithEntries.filter(d => d.className.includes('very-low-mood')).map(d => d.date)
+              'has-entry': daysWithEntries
             }}
             locale={cs}
             showOutsideDays
