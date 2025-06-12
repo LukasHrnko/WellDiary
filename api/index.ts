@@ -1,31 +1,30 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import express from 'express';
-import cors from 'cors';
-import { registerRoutes } from '../server/routes';
-import { setupAuth } from '../server/auth';
 
-const app = express();
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
-// Enable CORS for all origins in serverless environment
-app.use(cors({
-  credentials: true,
-  origin: true
-}));
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Simple health check for now
+  if (req.url === '/api' || req.url === '/api/health') {
+    res.status(200).json({ 
+      status: 'OK', 
+      timestamp: new Date().toISOString(),
+      message: 'WellDiary API is running'
+    });
+    return;
+  }
 
-// Setup authentication
-setupAuth(app);
-
-// Register API routes
-registerRoutes(app);
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-export default async (req: VercelRequest, res: VercelResponse) => {
-  return app(req, res);
-};
+  // For now, return a simple response for other endpoints
+  res.status(404).json({ message: 'Endpoint not found' });
+}

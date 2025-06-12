@@ -3,25 +3,36 @@
 ## Rychlý přehled problému
 Vaše aplikace zobrazuje build kód místo webové stránky, protože je navržena jako fullstack aplikace (React + Express), ale hosting platformy očekávají různé architektury.
 
-## Řešení podle platformy
+## Doporučené řešení - RENDER (Nejlepší pro fullstack aplikace)
 
-### 1. VERCEL (Nejjednodušší pro tento typ aplikace)
+### RENDER - Krok za krokem:
 
-**Kroky:**
-1. Připojte Git repository k Vercel
-2. V Vercel dashboard nastavte Environment Variables:
+1. **Připojte Git repository k Render.com**
+   - Vytvořte účet na render.com
+   - Klikněte na "New Web Service"
+   - Připojte váš Git repository
+
+2. **Nastavení Web Service:**
+   ```
+   Name: welldiary
+   Environment: Node
+   Build Command: npm install && npm run build
+   Start Command: npm start
+   ```
+
+3. **Environment Variables:**
    ```
    DATABASE_URL=your_postgresql_connection_string
+   NODE_ENV=production
    HUGGINGFACE_API_KEY=your_key (volitelné)
    ANTHROPIC_API_KEY=your_key (volitelné)
-   NODE_ENV=production
    ```
-3. Build Settings:
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-   - Install Command: `npm install`
 
-**Vercel automaticky použije vercel.json konfiguraci z vašeho projektu.**
+4. **Deploy** - Render automaticky nasadí aplikaci
+
+### VERCEL (Složitější, ale možné)
+
+**Aktuální Vercel konfigurace je zjednodušená a měla by fungovat.**
 
 ### 2. RENDER (Doporučeno pro fullstack aplikace)
 
